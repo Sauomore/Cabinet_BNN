@@ -134,6 +134,17 @@ def main() -> int:
     ap.add_argument("--k-basis", type=int, default=8)
     ap.add_argument("--rank", type=int, default=32)
     ap.add_argument("--resume", type=Path, default=None)
+    # ---- 关系门 ----
+    ap.add_argument("--relation-gate", action="store_true",
+                    help="启用双向注意力关系门")
+    ap.add_argument("--relation-dim", type=int, default=16,
+                    help="关系向量维度 r")
+    ap.add_argument("--relation-heads", type=int, default=1,
+                    help="关系头数（1 = 所有注意力头共享一个门）")
+    ap.add_argument("--init-from", type=Path, default=None,
+                    help="从该 checkpoint 【只加载模型权重】后开始新训练"
+                         "（优化器与步数重置）。与 --resume 的区别："
+                         "--resume 是继续同一轮，--init-from 是换配置重新开始")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -164,12 +175,19 @@ def main() -> int:
         vocab_size=stats["vocab_size"], n_words=stats["vocab_size"],
         preset=args.preset, max_len=args.ctx,
         ffn_mode=args.ffn_mode, k_basis=args.k_basis, rank=args.rank,
+        relation_gate=args.relation_gate,
+        relation_dim=args.relation_dim,
+        relation_heads=args.relation_heads,
     ).to(device)
     ps = model.n_params()
     print(f"[模型] {args.preset}  d={model.cfg.d_model} layers={model.cfg.n_layers} "
           f"heads={model.cfg.n_heads}  ctx={args.ctx}")
     print(f"       参数量 {ps['total']:,}  (per-token {ps['per_token']:,} + "
           f"共享 {ps['shared']:,})")
+    if args.relation_gate:
+        n_rel = sum(p.numel() for k, p in model.named_parameters() if "rel_" in k)
+        print(f"       双向关系门: 开启  r={args.relation_dim}  "
+              f"heads={args.relation_heads}  参数 {n_rel:,}")
 
     # 参数量与数据量的配比诊断
     tokens_per_param = train.n / max(ps["total"], 1)
@@ -198,8 +216,24 @@ def main() -> int:
     scaler = torch.amp.GradScaler("cuda", enabled=(use_amp and amp_dtype == torch.float16))
 
     start_step = 0
+    if args.init_from and args.init_from.exists():
+        # 只加载模型权重，优化器与步数重置 —— 用于「换配置重新训练」
+        ck = torch.load(args.init_from, map_location=device, weights_only=False)
+        sd = ck["model"]
+        missing, unexpected = model.load_state_dict(sd, strict=False)
+        rel_missing = [k for k in missing if "rel_" in k]
+        other_missing = [k for k in missing if "rel_" not in k]
+        print(f"[初始化] 从 {args.init_from.name} 加载模型权重")
+        print(f"         缺失 {len(missing)} 项（其中关系门 {len(rel_missing)} 项）"
+              f"，多余 {len(unexpected)} 项")
+        if other_missing:
+            print(f"         [警告] 非关系门的权重要缺失 {len(other_missing)} 项: "
+                  f"{other_missing[:5]}")
+            raise SystemExit("配置不匹配，拒绝继续（避免训练出无意义的结果）")
+        print(f"         原 checkpoint step={ck.get('step', '?')}  "
+              f"val_loss={ck.get('val_loss', float('nan')):.4f}")
     if args.resume and args.resume.exists():
-        ck = torch.load(args.resume, map_location=device)
+        ck = torch.load(args.resume, map_location=device, weights_only=False)
         model.load_state_dict(ck["model"])
         opt.load_state_dict(ck["opt"])
         start_step = ck["step"]
