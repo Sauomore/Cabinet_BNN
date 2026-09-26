@@ -1,0 +1,864 @@
+﻿% !TEX program = xelatex
+% Cabinet-BNN 技术路线文档 v2
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{array}
+\usepackage{makecell}
+\usepackage{multirow}
+
+% ---------- 颜色 ----------
+\definecolor{deepblue}{RGB}{28,64,120}
+\definecolor{warnred}{RGB}{160,30,30}
+\definecolor{okgreen}{RGB}{20,110,60}
+\definecolor{graylight}{RGB}{245,245,247}
+\definecolor{rulegray}{RGB}{200,200,205}
+
+% ---------- 标题样式 ----------
+\titleformat{\section}{\normalfont\Large\bfseries\color{deepblue}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries\color{deepblue}}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\bfseries}{\thesubsubsection}{0.6em}{}
+
+% ---------- 页眉页脚 ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{deepblue}Cabinet-BNN 技术路线 v2}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---------- hyperref ----------
+\hypersetup{colorlinks=true,linkcolor=deepblue,urlcolor=deepblue,citecolor=deepblue,
+            pdftitle={Cabinet-BNN 技术路线 v2},pdfauthor={},bookmarksnumbered=true}
+
+% ---------- 列表 ----------
+\setlist[itemize]{leftmargin=1.4em,topsep=2pt,itemsep=1.5pt,parsep=0pt}
+\setlist[enumerate]{leftmargin=1.6em,topsep=2pt,itemsep=1.5pt,parsep=0pt}
+
+% ---------- 自定义盒子 ----------
+\newcommand{\keybox}[1]{%
+  \begin{center}\begin{minipage}{0.94\textwidth}%
+  \colorbox{graylight}{\begin{minipage}{0.92\textwidth}\vspace{3pt}#1\vspace{3pt}\end{minipage}}%
+  \end{minipage}\end{center}}
+
+\newcommand{\warn}[1]{\textcolor{warnred}{\textbf{#1}}}
+\newcommand{\ok}[1]{\textcolor{okgreen}{\textbf{#1}}}
+
+% ---------- listings ----------
+% listings 无内置 Rust 支持，定义一个最小方言
+\lstdefinelanguage{RustLang}{
+  morekeywords={let,mut,fn,pub,struct,impl,use,mod,self,Self,return,match,if,else,
+                for,while,in,as,const,static,move,ref,where,trait,enum,type,
+                arc_swap,Ordering,Arc,Snapshot,Acquire,store,load,clone,count_ones},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+  morestring=[b]',
+}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single,
+        rulecolor=\color{rulegray},backgroundcolor=\color{graylight},
+        columns=fullflexible,keepspaces=true,showstringspaces=false}
+
+% ---------- 定理环境 ----------
+\newtheorem{proposition}{命题}
+\newtheorem{theorem}{定理}
+\newtheorem{lemma}{引理}
+\theoremstyle{definition}
+\newtheorem{definition}{定义}
+\newtheorem{remark}{注}
+
+\title{\vspace{-1.6cm}\textbf{\color{deepblue}Cabinet-BNN 技术路线}\\[4pt]
+       \large 以 HSH-64 权重码为参数载体的二值激活语言模型\\[2pt]
+       \normalsize \textcolor{gray}{v2 · 取代 v1（v1 的「冻结全精度主干」假设已作废）}}
+\author{}
+\date{2026-02-12}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\begin{center}
+\begin{minipage}{0.92\textwidth}
+\small
+\textbf{文档性质}：架构设计规范 + 工程实施路线。\\
+\textbf{前置依赖}：本文档的 \S\ref{sec:snapshot} 基于 \texttt{F:\textbackslash HSH\_64} 快照的源码阅读；
+作者已确认该快照\textbf{不是最新代码}，拿到权威版本后须复核（见 \S\ref{sec:snapshot} 复核清单）。\\
+\textbf{主要未决项}：D1--D7（见 \S\ref{sec:decisions}）。其中 \textbf{D7（激活二值化下的精度补偿）}是唯一
+可能影响架构可行性的未决项。
+\end{minipage}
+\end{center}
+
+\vspace{0.4cm}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{定位与总览}
+
+\subsection{一句话定位}
+
+\keybox{%
+\textbf{把 HSH-64 的 64 位结构化语义码，从「只读检索键」扩展为「可读写、可被反向传播直接编辑的权重参数载体」：
+在原 64 位检索码后\textbf{追加一段不参与检索的 per-token 参数段}，使每个 token 获得唯一的权重矩阵；
+权重由「共享基矩阵」按码指定的符号模式组合而成。}
+
+这套设计的三个卖点不是并列的，而是\textbf{同一个位运算的三种表现}：
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{能力} & \textbf{在标准 Transformer 里} \\
+\midrule
+构建权重 & 全局权重矩阵，与 token 无关 \\
+语义检索 & 独立的外部向量库 + 独立编码器 \\
+参数热更改 & 微调 / 模型编辑，需重算浮点权重 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+而在本设计中，这三件事\textbf{退化为同一个位操作}：翻转 1 bit 即同时改变该 token 的权重、
+改变它的检索近邻、并完成一次可原子提交的更新。}
+改变它的检索近邻、并完成一次可原子提交的更新。
+
+\subsection{与 v1 的差异}
+
+v1 版本假设「主干为冻结的全精度模型，只在其上挂一个二值码本」。该假设\textbf{已作废}——
+作者的设定是：\textbf{激活走二值化，权重允许浮点，且不存在全局权重，参数直接对应到每个 token}。
+本版据此重写。
+
+\subsection{HSH-64 原始设计（作者论文）}
+
+本设计完全建立在作者的 HSH-64 之上，其原始约定为：
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}llX@{}}
+\toprule
+\textbf{字段} & \textbf{位宽} & \textbf{原语义（检索语境）} \\
+\midrule
+\texttt{feat} & 4 & 词性 / 语义类别，最多 16 类，可作硬过滤 \\
+\texttt{sim}  & 52 & 语义相似码，主导检索质量；容量 $2^{52}\approx 4.5\times10^{15}$ \\
+\texttt{abs}  & 8 & \textbf{簇内}完美哈希标识，用于区分同 $(\texttt{feat},\texttt{sim})$ 桶内的词 \\
+\midrule
+合计 & 64 & 单个 \texttt{u64} 存储，一次 \texttt{popcnt} 计算 Hamming 距离 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\warn{关键性质（v1 曾误解，本版修正）}：\texttt{abs} 是\textbf{桶内}唯一编号，
+\textbf{不是桶的地址}。桶的地址由 $(\texttt{feat},\texttt{sim})$ 决定。这一区分决定了容量结论（见 \S\ref{sec:capacity}）。
+
+% =====================================================================
+\section{参考实现：快照级约定}\label{sec:snapshot}
+
+\begin{center}
+\begin{minipage}{0.94\textwidth}
+\colorbox{graylight}{\begin{minipage}{0.92\textwidth}\vspace{3pt}
+\small
+\warn{前置声明}：以下全部结论来自 \texttt{F:\textbackslash HSH\_64} 的\textbf{快照}源码阅读，
+并通过 \texttt{cargo test --release}（\ok{21/21 通过}，0.03\,s）验证其自洽性。
+作者已确认该快照\textbf{滞后于最新代码}。拿到权威版本后，下表各项必须复核。
+\vspace{3pt}\end{minipage}}
+\end{minipage}
+\end{center}
+
+\vspace{0.2cm}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lXc@{}}
+\toprule
+\textbf{需复核项} & \textbf{当前快照结论} & \textbf{风险} \\
+\midrule
+位布局 & \texttt{feat[63:60] + sim[59:8] + abs[7:0]}，\texttt{SIM\_SHIFT=8} & 高 \\
+模型文件格式 & 魔数 \texttt{0xCAB1DE3D}，全 \textbf{big-endian}，v1 头 20B / v2 头 24B & 高 \\
+Deep Hash 结构 & \texttt{x → [Linear→BN(eval,eps=1e-5)→ReLU]×depth → Linear} & 中 \\
+量化判定 & \texttt{sim} 第 $i$ 位置 1 $\iff u_i \ge 0$（\textbf{含零}） & 中 \\
+MIH 自适应停止 & $|C|\ge\max(K,\alpha K)$ 且 $|C_{\text{new}}|/|C|<\delta$ & 中 \\
+贪心翻转 & $\Delta_{i,b}=\sum_{j\ne i}W_{ij}(1-2\cdot\mathbb{1}[C_{i,b}=C_{j,b}])$ & 中 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Deep Hash 二进制格式（导出侧必须逐字节对齐）}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}llX@{}}
+\toprule
+\textbf{偏移} & \textbf{字段} & \textbf{类型} \\
+\midrule
+0 & \texttt{magic = 0xCAB1DE3D} & u32 BE \\
+4 & \texttt{version}（1 或 2） & u32 BE \\
+8 & \texttt{dim} & u32 BE \\
+12 & \texttt{hidden\_dim} & u32 BE \\
+16 & \texttt{depth}（仅 v2） & u32 BE \\
+16 或 20 & \texttt{n\_bits} & u32 BE \\
+\dots & \texttt{mean} & $\texttt{dim}\times$ f32 BE \\
+\dots & 每层 $W,b,\gamma,\beta,\mu,\sigma^2$ & f32 BE \\
+\dots & $W_{\text{out}}, b_{\text{out}}$ & f32 BE \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =====================================================================
+\section{权重码架构（本设计的核心）}\label{sec:arch}
+
+\subsection{128 位权重码}
+
+在 HSH-64 的 64 位检索码之后，追加 \textbf{64 位不参与检索的 per-token 参数段}：
+
+\keybox{%
+\begin{center}
+\begin{tabular}{@{}cccc@{}}
+\toprule
+\texttt{feat}(4) & \texttt{sim}(52) & \texttt{abs}(8) & \texttt{param}(64) \\
+\midrule
+\multicolumn{3}{c}{\textbf{hash 段（64 位）：参与检索}} & \textbf{参数段（64 位）：仅用于权重生成} \\
+\bottomrule
+\end{tabular}
+\end{center}}
+
+\texttt{param} 段存在的\textbf{必然性}：\S\ref{sec:capacity} 将说明 $(\texttt{feat},\texttt{sim})$ 定义语义桶、
+\texttt{abs} 是桶内唯一编号。因此\textbf{同一个桶内的 token 共享 $(\texttt{feat},\texttt{sim})$ 与全部 \texttt{sim} 位}，
+在原 64 位内\textbf{不存在任何可用于区分它们权重的自由度}。必须有新的一段。
+
+\subsection{三层语义对齐（「无缝衔接」的精确定义）}
+
+作者要求「后端到前端的哈希码含义完全无缝衔接」。在本架构下，三个层次是\textbf{同一个划分}：
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lllX@{}}
+\toprule
+\textbf{层次} & \textbf{后端（检索）} & \textbf{前端（权重）} & \textbf{是否同一划分} \\
+\midrule
+$(\texttt{feat},\texttt{sim})$ & 语义桶地址 & 选择共享基矩阵 $B_j$ & \ok{同一个} \\
+\texttt{abs} & 桶内唯一编号 & 桶内 token 消歧 & \ok{同一个} \\
+\texttt{param} & \warn{不参与} & per-token 符号调制 & 新增自由度 \\
+整个 128 位 & （仅前 64 位） & 权重标识 & 见 \S\ref{sec:retrieval} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\textbf{无转换层}：检索用的桶就是权重用的基，检索用的 \texttt{abs} 就是 token 消歧编号。
+
+\subsection{容量分析（修正 v1 的错误结论）}\label{sec:capacity}
+
+\warn{v1 的错误}：v1 曾把 \texttt{abs} 当作桶地址，得到「桶数 $=2^{F+A}=4096<151{,}936$」，
+进而推出「需要动态码长 / 变长码 / 分层检索」等一整套复杂机制。\textbf{该前提错误，相关机制全部不需要。}
+
+正确算法如下。
+
+\begin{proposition}[桶结构与容量]
+设 hash 段为 $\texttt{feat}(F)+\texttt{sim}(S)+\texttt{abs}(A)$，词表大小 $N$。则
+\begin{enumerate}
+\item 语义桶（semantic bucket）数为 $2^{F+S}$，\textbf{不是} $2^{F+A}$；
+\item 每桶可用 \texttt{abs} 槽位为 $2^{A}=256$；
+\item 全局容量为 $2^{F+S}\cdot 2^{A}=2^{64}$。
+\end{enumerate}
+\end{proposition}
+
+代入 $F=4,S=52,A=8$：
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+语义桶数 & $2^{4}\times 2^{52}=2^{56}\approx 7.2\times10^{16}$ \\
+每桶槽位 & $2^{8}=256$ \\
+全局容量 & $2^{64}\approx 1.8\times10^{19}$ \\
+实际需求（Qwen2.5 词表） & $151{,}936$ \\
+\textbf{冗余} & $\approx 1.2\times10^{14}$ \ok{倍} \\
+平均占用 & $151{,}936/2^{56}\approx 37$ token/桶 $\ll 256$ \ok{$\checkmark$} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{remark}[唯一性判据]
+\texttt{abs} 提供完美哈希的\textbf{充分必要条件}是：每个 $(\texttt{feat},\texttt{sim})$ 桶内的 token 数 $\le 256$。
+桶数不需要为 $N/256$，因为 $(\texttt{feat},\texttt{sim})$ 的空间本身极大。
+\end{remark}
+
+\warn{唯一残留风险}：桶大小的\textbf{分布}。若某桶堆入 $>256$ 个 token，\texttt{abs} 溢出。
+该量可直接测量：对 Qwen 词表跑一遍投影，统计 $(\texttt{feat},\texttt{sim})$ 桶大小直方图。
+若最大桶 $<256$，则\textbf{本架构原样成立，一位都不需修改}。
+
+\subsection{权重生成}
+
+\begin{definition}[权重生成]
+第 $\ell$ 层、token $t$ 的权重矩阵为
+\begin{equation}
+W_t^{(\ell)} \;=\; \sum_{j=1}^{k} s_j(\texttt{sim}_t,\, p_t)\cdot B_j^{(\ell)}
+\label{eq:Wgen}
+\end{equation}
+其中 $B_j^{(\ell)}\in\mathbb{R}^{d\times d}$ 是共享基矩阵，$s_j\in\{-1,+1\}$ 为符号系数。
+\end{definition}
+
+\subsubsection{符号合成：$s=\text{mask}\odot p$}
+
+\begin{definition}[符号合成]
+\begin{align}
+\text{mask}(\texttt{sim}_t) &\in \{-1,+1\}^{52}, &\quad
+\text{mask}_j &= \begin{cases}+1,&\text{sim 第 } j \text{ 位}=1\\ -1,&\text{sim 第 } j \text{ 位}=0\end{cases}\\
+p_t &\in \{-1,+1\}^{64}, &\quad & p_t \text{ 由 param 段给出}\\
+s_j &= \text{mask}_j(\texttt{sim}_t)\;\cdot\; p_t[\,j \bmod 64\,]
+\end{align}
+\end{definition}
+
+\subsubsection{几何隔离性质（本设计的数学基石）}
+
+\begin{theorem}[几何隔离]\label{thm:iso}
+对两个 token $a,b$，其符号模式之差的 Hamming 重量满足
+\begin{equation}
+\bigl|\{j : s_j(a)\ne s_j(b)\}\bigr| \;=\; \bigl|\{j : \text{mask}_j(a)\ne\text{mask}_j(b)\}\bigr| \;\oplus\; \bigl|\{j : p_a[j]\ne p_b[j]\}\bigr|
+\end{equation}
+特别地，当二者\textbf{属于同一语义桶}（$\texttt{sim}_a=\texttt{sim}_b$）时：
+\begin{equation}
+|s(a)\odot s(b)| \;=\; d_H(p_a,\,p_b)
+\end{equation}
+即\textbf{权重差异完全由 \texttt{param} 决定，与共享的 \texttt{mask} 无关。}
+\end{theorem}
+
+\begin{proof}
+$s(a)\odot s(b) = (\text{mask}(a)\odot\text{mask}(b))\odot(p_a\odot p_b)$。
+当 $\text{mask}(a)=\text{mask}(b)$ 时第一项为全 $+1$，故只剩 $p_a\odot p_b$。
+一般情形下逐位异或，重量为两部分的逐位异或，即所述。
+\end{proof}
+
+\begin{remark}[工程含义]
+\textbf{改 \texttt{param} 不会破坏 \texttt{sim} 建立的语义结构，反之亦然。}
+这是\textbf{可证明的隔离}，而非依靠超参保证。对「热更改」而言这是安全性保证：
+可以只动 per-token 参数而不扰动语义几何，也可以只动语义码而不影响 token 身份。
+\end{remark}
+
+\subsection{\texttt{param} 的结构化初始化}
+
+若 $p_t$ 为白噪声，则同桶 token 的权重互不相关，语义聚簇失效。因此需要结构化初始化：
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{初始化} & \textbf{后果} \\
+\midrule
+逐位随机 & 同桶 token 差异过大 $\Rightarrow$ 语义聚簇失效 \\
+全常数 & 同桶 token 几乎相同 $\Rightarrow$ 256 个槽位浪费 \\
+\textbf{块常数}（建议块宽 8） & 块内共享 $\Rightarrow$ 保留局部结构；块间不同 $\Rightarrow$ 提供区分度 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+块宽（默认 8，即 8 个块）是本设计\textbf{唯一需要调的结构超参}。
+
+\subsection{表达力边界（须记录的已知限制）}
+
+由式 \eqref{eq:Wgen}，$s\in\{-1,+1\}^k$ 只能取 $k$ 个基的\textbf{符号组合}。因此
+每个 token 的权重被限制在「基矩阵的符号翻转」这一集合内：\textbf{幅值完全由基决定，
+token 无法调整自身权重的大小，只能调方向。}
+
+这在数量上充足（每桶 256 个 token，可用权重矩阵数 $\le 2^{64}$），但若实验表明需要
+per-token 幅值自由度，可在 \texttt{param} 之外追加一小段浮点 scale（$4\sim 8$ 个 fp16）。
+该小段\textbf{不参与检索}，故不破坏定理 \ref{thm:iso} 的隔离性。\textbf{建议先不加}，由实验决定。
+
+% =====================================================================
+\section{码本、影子参数与热更改}\label{sec:codebook}
+
+\subsection{三层存储}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}llrlX@{}}
+\toprule
+\textbf{结构} & \textbf{形状} & \textbf{精度} & \textbf{大小}($N{=}152$k) & \textbf{更新频率} \\
+\midrule
+\texttt{CodeTable} & $N\times128$ bit & \texttt{2×u64} & 2.43 MB & 慢（滞回翻转） \\
+\texttt{Shadow} & $N\times128$ & fp16 & 39 MB & 快（每步梯度） \\
+\texttt{Basis} & $k$ 个 $d\times d$ & fp16/低秩 & 见 \S\ref{sec:basis} & 每步梯度 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{影子参数 + 滞回翻转}
+
+\keybox{%
+\textbf{为什么必须有影子参数}：若直接对码位做 STE，会出现两个致命问题——
+\begin{enumerate}
+\item \textbf{低频 token 学不到}：batch 只覆盖约 3 万 token，词表 15 万，
+      低频 token 永不进入 batch $\Rightarrow$ 永不更新。
+\item \textbf{错位无法纠正}：STE 梯度只沿当前码的 $\pm1$ 方向，
+      码已错则梯度把它推得更错——\textbf{无法翻转一位}。
+\end{enumerate}}
+
+\begin{definition}[影子参数与滞回翻转]
+对每个 token 的每一位维护连续影子参数 $\theta_{t,b}\in\mathbb{R}$，码位为
+$\;c_{t,b}=\operatorname{sign}(\theta_{t,b})$，前向使用 $c$，反向 STE 令
+$\partial c/\partial\theta\approx\mathbb{I}$。仅当
+\begin{equation}
+|\theta_{t,b}|>\tau_{\text{flip}} \quad\text{且}\quad \operatorname{sign}(\theta_{t,b})\ne c_{t,b}
+\end{equation}
+时才实际翻转该位。$\tau_{\text{flip}}$ 由 $1.0$ 线性退火至 $0.3$。
+\end{definition}
+
+\textbf{额外收益}：$|\theta_{t,b}|$ 就是该位的\textbf{置信度}，可直接用于
+HSH-64 的非对称距离评分，无需额外计算。
+
+\subsection{热更改的原子性}
+
+\begin{lstlisting}[language=RustLang]
+// 读者路径：无锁、无等待
+let snap: Arc<Snapshot> = self.snapshot.load(Ordering::Acquire);
+let codes: &[u64] = &snap.codes;      // 不可变切片，读者永不阻塞
+
+// 写者路径：copy-on-write
+let mut new_codes = snap.codes.clone();   // 只 clone 受影响的桶
+new_codes[2*t]     ^= mask_lo;            // 128 位 = 2×u64
+new_codes[2*t + 1] ^= mask_hi;
+let mut new_snap = Snapshot::from(snap);
+new_snap.codes = Arc::new(new_codes);
+new_snap.version = snap.version + 1;
+self.snapshot.store(Arc::new(new_snap));  // 一次原子指针交换
+\end{lstlisting}
+
+\textbf{保证}：读者不阻塞、不加锁；单次翻转对所有并发读者原子可见（无中间态）；
+回滚 $=$ 存回旧 \texttt{Arc}，$O(1)$。
+
+\warn{并发安全边界}：\texttt{new\_codes[..] \^{}= mask} 操作的是
+\textbf{clone 出来的私有副本}，因此不需要 CAS 循环。直接原地修改 \texttt{\&[u64]} 是 UB。
+此项须在代码审查中重点确认。
+
+% =====================================================================
+\section{共享基矩阵}\label{sec:basis}
+
+\subsection{参数量与低秩分解}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lrrX@{}}
+\toprule
+\textbf{方案} & \textbf{每基参数} & \textbf{$k$ 基合计} & \textbf{可行性} \\
+\midrule
+完整 $d\times d$ fp16 & 802k & 51 M（$k{=}64$） & 可接受 \\
+低秩 $r{=}32$ & 57k & 3.7 M（$k{=}64$） & \ok{推荐} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+建议 $B_j = U_j V_j^{\top}$，$U_j\in\mathbb{R}^{d\times r}$，$V_j\in\mathbb{R}^{r\times d}$，
+$d=896$、$r=32$、$k=64$ 时基参数约 \textbf{370 万}，在 8\,GB 显存下宽裕。
+
+\subsection{在线成本}
+
+每个 token 需 $k$ 次秩 $r$ 的应用（式 \eqref{eq:Wgen} 的符号已由 popcount 类运算得到）：
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+$k=64$, $r=32$, $d=896$ & $64\times(2\times 896\times 32)=3.67\times10^{6}$ MACs / token \\
+每 token 输出 & $d=896$ 维 \\
+与全连接 $d\times d$ 相比 & $3.67\text{M}$ vs $0.80\text{M}$ MACs（\warn{约 4.6$\times$}）\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\warn{注意}：式 \eqref{eq:Wgen} 的朴素实现比单个全连接层\textbf{更贵}。
+若在线成本成为瓶颈，需要在以下方向优化（见 \S\ref{sec:risks} R6）：
+减少 $k$、降低秩 $r$、或仅对前若干层使用本机制。
+
+% =====================================================================
+\section{后端检索}\label{sec:retrieval}
+
+\subsection{只前 64 位参与检索}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lXc@{}}
+\toprule
+\textbf{方案} & \textbf{优点} & \textbf{缺点} \\
+\midrule
+全 128 位参与 & 一次大比较 & \warn{\texttt{param} 污染语义距离}：语义相同的 token 会被参数差异拉远 \\
+\textbf{仅前 64 位}（采纳） & 语义几何纯净 & 跨字需两次 popcount \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+跨字成本：
+\begin{equation}
+d_H(a,b)=\bigl((a_0\oplus b_0)\texttt{.count\_ones()}\bigr)+\bigl((a_1\oplus b_1)\texttt{.count\_ones()}\bigr)
+\end{equation}
+即两次 \texttt{popcount} 加一次加法，\textbf{仍是常数时间}。在 15 万条规模下（$<20\,\mu$s）
+不构成瓶颈，而语义几何纯净性的收益远大于省一次 \texttt{popcount}。
+
+\subsection{为何一期不用 MIH}
+
+HSH-64 的 MIH 分段设计（$B=13$，每段 4 位）是针对 $N=3109$ 的。按论文定理 4 的期望候选数公式
+
+\begin{equation}
+\mathbb{E}[|C|]\le N\left(1-\Bigl(1-\frac{V(M/B,\lfloor r/B\rfloor)}{2^{M/B}}\Bigr)^{B}\right)
+\end{equation}
+
+在 $N=150$k、每段 8 位时：半径 $r\le 7$ 的候选池恒为约 $1.1\times10^4$
+（退化为 $O(N)$），而 $r=8$ 时突然爆到约 $8.4\times10^4$（\textbf{超过暴力扫描}），
+且索引本身需约 62\,MB，使内存膨胀 26 倍。
+
+\keybox{%
+\textbf{一期决策}：使用\textbf{暴力 popcount}。15 万条 $\times$ 8 字节 $=$ 1.2\,MB 码本可完全驻留
+L2/L3；SIMD 一次处理 4$\sim$8 个 \texttt{u64}，预期 $<20\,\mu$s。
+MIH 模块\textbf{保留}（可直接复用快照的 \texttt{mih\_index.rs}），以 feature flag 切换，待 $N>10^6$ 时启用。}
+
+% =====================================================================
+\section{训练路线}
+
+\subsection{阶段 0：语义锚点（第一个里程碑，不可跳过）}
+
+\begin{enumerate}
+\item 用 \texttt{F:\textbackslash hsh64\_models\textbackslash bge-large-zh-v1.5} 对 \texttt{vocab\_3109.txt} 生成语义嵌入。
+\item 训练 Deep Hash 投影头，\textbf{完全按 HSH-64 论文 §5.2.2}：
+      $\mathcal{L}_{\text{info}}+\lambda_q\mathcal{L}_{\text{quant}}+\lambda_b\mathcal{L}_{\text{balance}}$，STE，Adam，lr $=10^{-3}$。
+\item 用论文 Algorithm 1 做召回导向贪心后处理。
+\item 评测纯 Hamming Recall@10。
+\end{enumerate}
+
+\textbf{验收}：Recall@10 $\ge 0.70$（论文：h256 为 0.7382，h512 为 0.7404）。
+
+\textbf{为何不可跳过}：若跳过此步，码是随机的，反传只能学到噪声，后续所有新架构实验\textbf{无法归因}。
+
+\subsection{阶段 1：码本 $+$ 基矩阵联合训练}
+
+冻结语义锚点，训练 $B_j$ 与 \texttt{param} 段：
+
+\begin{equation}
+\mathcal{L}=\mathcal{L}_{\text{LM}}+\lambda_1\mathcal{L}_{\text{quant}}+\lambda_2\mathcal{L}_{\text{balance}}+\lambda_3\mathcal{L}_{\text{iso}}
+\end{equation}
+
+其中 $\mathcal{L}_{\text{iso}}$ 用于维持定理 \ref{thm:iso} 的隔离性（惩罚 \texttt{mask} 与 $p$ 的非正交耦合）。
+
+\subsection{阶段 2：位级编辑 $+$ 遗忘 $+$ 自学习闭环}
+
+\textbf{离线编辑}：复用论文 Algorithm 1，但目标函数从「检索召回」换成语言建模损失，
+此时的 $\Delta_{t,b}$ 没有闭式解，退化为\textbf{有限差分}：
+
+\begin{equation}
+\Delta_{t,b}=\mathcal{L}(\text{翻转第 }t\text{ 个 token 的第 }b\text{ 位})-\mathcal{L}
+\end{equation}
+
+成本为 batch 内唯一 token 数 $U$ 乘 128 次前向，\warn{必须批处理摊销}
+（把所有候选翻转堆成一个 batch 并行前向）。
+
+\textbf{遗忘系数}（per-token，时间衰减）：
+\begin{equation}
+\theta_{t}\leftarrow\theta_{t}\cdot\lambda_t^{\Delta t},\qquad
+\lambda_t=\lambda_{\text{base}}^{\,1+\nu\cdot \text{freq}[t]^{-1}}
+\end{equation}
+当 $|\theta_{t,b}|$ 因衰减跌破 $\tau_{\text{freeze}}$ 时，该位\textbf{永久冻结}（长期记忆固化）。
+
+\textbf{自学习闭环（单跳知识问答）}：
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+① 写入 & 陈述句 $\to$ 128 位权重码 $\to$ 后端存条目 \\
+② 查询 & 只给问题 $\to$ 投影出 hash 段 $\to$ popcount 检索 $\to$ 返回 value \\
+③ 指标 & Hit@1 / Hit@10 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\textbf{验收}：写入 500 条合成知识，Hit@10 $\ge 0.60$，且基座 PPL 退化 $<2\%$。
+
+% =====================================================================
+\section{未决项 D7：激活二值化下的精度补偿}\label{sec:d7}
+
+\warn{这是本文档唯一可能影响架构可行性的未决项。}
+
+\subsection{问题的形式}
+
+已知设定：\textbf{激活走二值化，权重允许浮点}。前向为
+\begin{equation}
+b^{(l+1)}=\operatorname{sign}\bigl(W_t^{(l)} b^{(l)}\bigr),\qquad b^{(l)}\in\{-1,+1\}^{d}
+\end{equation}
+
+\subsection{为何这对本架构特别关键}
+
+本架构的\textbf{全部精度}来自浮点基矩阵 $B_j$ 的线性组合。但二值激活下
+$\operatorname{sign}(W_t b)$ \textbf{只关心 $W_t b$ 的符号}，浮点精度仅在与 $0$ 比较的边界附近有意义。
+
+具体地，"$\texttt{feat}/\texttt{abs}$ 选哪组基"的作用退化为「\textbf{移动决策边界的位置}」；
+浮点基相对二值基的精度优势被激活的 $\operatorname{sign}$ 大幅抹平。
+
+叠加低秩（$r=32$）后问题更明显：$W_t b$ 落在 32 维子空间内，精度提升空间本就有限。
+
+\subsection{由此产生的三个子问题（需要作者决断）}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}clX@{}}
+\toprule
+\textbf{ID} & \textbf{子问题} & \textbf{说明} \\
+\midrule
+D7a & 二值激活的\textbf{目的} & 若是「计算与检索统一」（激活 $=$ 决策位，匹配 $=$ popcount），
+则基也应走低比特，整个栈统一为位运算；若是「省推理算力」，则浮点权重与之矛盾 \\
+D7b & \textbf{scale 机制} & 标准二进制网络靠 scaling factor 找回幅度。
+本架构中该 scale 是 per-token 的还是共享的？共享则不属于「全局权重」，per-token 则需额外存储 \\
+D7c & \textbf{层间复合退化} & 若每层严格 $\operatorname{sign}$，两层线性变换在恒等区可合并，
+表达力可能退化。是否需要逐元素非线性或残差旁路？
+\warn{此项待实验验证，不作推测性结论} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =====================================================================
+\section{Rust 引擎设计}
+
+\subsection{模块划分}
+
+\begin{lstlisting}
+crates/
+├── hsh-core/       # 复用快照 hsh64.rs / perfect_hash.rs / pos_map.rs（逐位兼容）
+├── hsh-memory/     # 码本（2×u64）、暴力检索(SIMD)、写入、快照
+├── bnn-weights/    # 权重生成：mask ⊙ p、基矩阵组合、低秩应用
+├── bnn-model/      # 前向：BitLinear、Attention、RMSNorm、KV Cache
+├── hsh-runtime/    # 热替换运行时：ArcSwap 双缓冲、版本号、回滚、mmap
+└── hsh-cli/        # bench / serve / codec 工具
+\end{lstlisting}
+
+\subsection{跨字 popcount 的实现要点}
+
+\begin{lstlisting}[language=RustLang]
+#[inline(always)]
+fn hamming128(a: (u64, u64), b: (u64, u64)) -> u32 {
+    (a.0 ^ b.0).count_ones() + (a.1 ^ b.1).count_ones()
+}
+\end{lstlisting}
+
+由于检索只用 hash 段，实际热路径为 \texttt{hamming64}，与快照实现完全一致。
+
+% =====================================================================
+\section{环境与资产}\label{sec:env}
+
+\subsection{已实测的环境（全部本机验证）}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}llX@{}}
+\toprule
+\textbf{项} & \textbf{实测值} & \textbf{状态} \\
+\midrule
+Python & 3.11.9 & \ok{$\checkmark$} \\
+PyTorch & 2.5.1+cu121 & \ok{$\checkmark$} \\
+transformers / sentence-transformers & 5.13.1 / 5.6.0 & \ok{$\checkmark$} \\
+Rust & cargo / rustc 1.96.0 & \ok{$\checkmark$} \\
+GPU & RTX 4060 Laptop, 8\,GB, driver 616.64 & \ok{\texttt{cuda.is\_available()}} \\
+LaTeX & MiKTeX, \texttt{xelatex} + \texttt{ctexart} & \ok{$\checkmark$ 中文与公式编译通过} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{网络（关键约束）}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\texttt{huggingface.co} & \warn{超时不可达} \\
+\texttt{hf-mirror.com} & \ok{可用}（已实测可下载） \\
+\texttt{modelscope.cn} / \texttt{pypi.org} & \ok{可用} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+所有模型下载必须走 \texttt{HF\_ENDPOINT=https://hf-mirror.com}。
+
+\subsection{本地资产}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+\textbf{路径} & \textbf{内容} & \textbf{状态} \\
+\midrule
+\texttt{F:\textbackslash HSH\_64} & 论文参考实现（Rust 8 模块 + 12 Python 脚本） & \warn{旧快照} \\
+\texttt{...\textbackslash tests\textbackslash data\textbackslash vocab\_3109.txt} & 3109 词表 & \ok{$\checkmark$} \\
+\texttt{F:\textbackslash hsh64\_models\textbackslash bge-large-zh-v1.5} & 教师权重 1.3\,GB（392 张量） & \ok{$\checkmark$} \\
+\texttt{E:\textbackslash Ollama\textbackslash Models} & qwen3:8b (Q4\_K\_M) & \warn{不可用作教师} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\warn{Ollama 不可用作教师的实测依据}：\texttt{/api/embed} 返回 \texttt{501 Not Implemented}，
+\texttt{/api/show} 仅返回元数据。GGUF 4-bit 量化权重无法提供 logits 或隐层状态，
+而蒸馏、码对齐、语义锚点三处均硬依赖它们。
+
+\subsection{已知坑}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}clX@{}}
+\toprule
+\textbf{ID} & \textbf{现象} & \textbf{对策} \\
+\midrule
+K1 & \texttt{torch 2.5.1} 加载 bge-large 报「requires torch $\ge$ 2.6」 &
+\texttt{torch.load(..., map\_location="cpu")} 用\textbf{默认参数}可绕过（已实测）；
+建议一次性转 \texttt{safetensors} \\
+K2 & \texttt{C:} 盘仅剩 18.4\,GB & 所有模型与缓存放 \texttt{E:}/\texttt{F:} \\
+K3 & 快照非最新代码 & 见 \S\ref{sec:snapshot} 复核清单 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =====================================================================
+\section{对 HSH-64 论文数学命题的核查}\label{sec:prop3}
+
+为判断「容量是否够用」，本文档对论文第 6 节的命题做了纯 CPU 数值复现。
+\textbf{复现脚本}：\texttt{tools/verify\_paper\_math.py} $\to$ \texttt{results/paper\_math\_verification.txt}。
+
+\subsection{核查结果}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}clX@{}}
+\toprule
+\textbf{命题} & \textbf{内容} & \textbf{结果} \\
+\midrule
+Prop.1 & Hamming 球容量 $V(52,10)\approx2.5\times10^{10}$ & \ok{一致}（实为 $2.04\times10^{10}$，四舍五入） \\
+Prop.2 & $\mathbb{E}[d_H]=M/2$，$\mathrm{Var}=M/4$ & \ok{一致}（26 与 3.6056） \\
+\textbf{Prop.3} & 称 $d\le18$ 时 $N\cdot V(52,d-1)<2^{52}$ & \warn{错误，实际最大 $d=14$} \\
+Thm.1 & 比特翻转梯度闭式解 & \ok{代数正确}，本设计直接复用 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Prop.3 的精确错误定位}
+
+论文原文：\emph{「对 $d=18$，$V(52,17)\approx1.3\times10^{12}$，
+$N\cdot V(52,17)\approx3.9\times10^{15}<2^{52}\approx4.5\times10^{15}$，故理论上存在这样的码本。」}
+
+实测：
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+$V(52,17)$ & $=3.9481\times10^{13}$ \quad（论文称 $1.3\times10^{12}$）\\
+$V(64,17)$ & $=2.0926\times10^{15}$\\
+$3109\cdot V(52,17)$ & $=1.2275\times10^{17}$ \quad vs \quad $2^{52}=4.5036\times10^{15}$ \warn{（超出 27 倍）} \\
+\end{tabular}
+\end{center}
+
+\textbf{根因}：$1.3\times10^{12}$ 这组数字的量级对应 $M=64$ 的 Hamming 球，而非 $M=52$。
+即 $V(M,d-1)$ 一步误用了 64 位空间。旁证：论文 §4 使用的 $2^{52}\approx4.5\times10^{15}$ 自身自洽，
+唯独 Prop.3 的球体积跳到了 64 位。
+
+逐项重算 $M=52,N=3109$：
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+$d$ & $V(52,d-1)$ & $N\cdot V$ & 是否 $<2^{52}$ \\
+\midrule
+13 & $2.8719\times10^{11}$ & $8.9288\times10^{14}$ & \ok{成立} \\
+\textbf{14} & $9.2221\times10^{11}$ & $2.8671\times10^{15}$ & \ok{\textbf{成立（上界）}} \\
+15 & $2.6912\times10^{12}$ & $8.3669\times10^{15}$ & \warn{不成立} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{正确结论：$d\le14$，而非 $d\le18$。}
+
+\subsection{影响评估}
+
+\begin{enumerate}
+\item \textbf{不影响论文任何实验结论}。Prop.3 是纯存在性理论论证，Recall 数字全部来自真实实验，
+      订正它不需重跑训练。
+\item \textbf{订正后 52 位的选择更有说服力}。$(M,d)=(52,14)$ 给出 $d/M=0.269$，
+      紧贴 Hamming 界上界（$\approx0.288$）与 Varshamov--Gilbert 界下界（$\approx0.213$）之间。
+\item \textbf{修正后的界强化了本设计的动机}：52 位码在 $N=3109$ 时仅能支持最小距离 14；
+      扩到 15.2 万 token 后碰撞压力上升，这正是「码需可写、可增量编辑」的硬性理由。
+\end{enumerate}
+
+% =====================================================================
+\section{风险清单}\label{sec:risks}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}clXl@{}}
+\toprule
+\textbf{ID} & \textbf{风险} & \textbf{对策} & \textbf{级别} \\
+\midrule
+R1 & 纯位级 STE 导致低频 token 学不到、错位不可纠 & \S\ref{sec:codebook} 影子参数 + 滞回翻转（\textbf{必选}） & \warn{致命} \\
+R2 & 桶大小分布不均，某桶 $>256$ 致 \texttt{abs} 溢出 & 直接测量桶大小直方图；必要时桶内换 \texttt{sim} 分桶 & 高 \\
+R3 & 二值激活抹平浮点基精度（\S\ref{sec:d7}） & D7 决断 & \warn{高} \\
+R4 & 有限差分位编辑成本 $O(U\times128)$ 次前向 & 候选翻转堆成 batch 并行前向 & 高 \\
+R5 & 在线权重生成比全连接贵约 4.6$\times$ & 减少 $k$、降低 $r$、或仅前若干层启用 & 中 \\
+R6 & 一期 MIH 无效 & 已定量论证（\S\ref{sec:retrieval}）$\Rightarrow$ 暴力 popcount & 中 \\
+R7 & 快照非最新代码，误改无法回滚 & \textbf{只读引用}，代码复制到本仓库并注明出处 & 中 \\
+R8 & 8\,GB 显存不足 & Qwen2.5-0.5B（fp16 约 1\,GB）+ 预缓存教师输出 & 中 \\
+R9 & 几何隔离性在训练中被破坏 & 加 $\mathcal{L}_{\text{iso}}$ 正则 + 每步监控 $|s(a)\odot s(b)|$ & 中 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =====================================================================
+\section{里程碑与验收标准}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}clXl@{}}
+\toprule
+\textbf{\#} & \textbf{里程碑} & \textbf{验收标准（可量化）} & \textbf{备注} \\
+\midrule
+M0 & 环境就绪 & 三模型可加载且前向形状正确 & — \\
+M1 & \textbf{论文复现} & 纯 Hamming Recall@10 $\ge0.70$ & \textbf{不可跳过} \\
+M2 & Rust 记忆后端 & 与快照 benchmark \textbf{逐查询一致}；报告 QPS & — \\
+M3 & 热替换运行时 & \texttt{loom}/\texttt{miri} 零数据竞争；写延迟 p99 $<10\,\mu$s & — \\
+\textbf{M3.5} & \textbf{桶分布测量} & $(\texttt{feat},\texttt{sim})$ 桶大小直方图，\textbf{最大桶 $<256$} & \warn{新增，决定 R2} \\
+\textbf{M3.6} & \textbf{核心消融} & 同参数量下「128 位码 $+$ 共享基」vs「直接 per-token $d$ 维 embedding」 & \warn{新增，决定论文成立与否} \\
+M4 & 码本 $+$ 基联合训练 & 未见 token 码与锚点码平均 Hamming $<16$ bit；PPL 退化 $<2\%$ & — \\
+M5 & 自学习闭环 & 写 500 条，Hit@10 $\ge0.60$；3 域后域 1 不退化 & — \\
+M6 & 遗忘机制验证 & 有/无遗忘系数消融；长期未用 token 的码位固化率 & — \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\keybox{%
+\textbf{关于 M3.6（新增）}：这是判断架构是否成立的\textbf{唯一关键实验}。
+因为「per-token 可训练参数」在数学上就是 embedding 层——Transformer 的 embedding 表一直是
+per-token 参数、一直由梯度更新、且只更新 batch 内出现的行。
+必须证明「128 位压缩 $+$ 共享基」\textbf{不只是 embedding 的低配版}。
+\begin{itemize}
+\item 若赢或打平 $\Rightarrow$ 架构成立：同时买到 $112\times$ 压缩 $+$ 检索键复用 $+$ 位级热更改。
+\item 若输 $\Rightarrow$ 定位需改为「以检索为中心的轻量方案」，而非通用参数容器。
+\end{itemize}}
+
+% =====================================================================
+\section{决策点汇总}\label{sec:decisions}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}clXl@{}}
+\toprule
+\textbf{ID} & \textbf{决策点} & \textbf{建议} & \textbf{状态} \\
+\midrule
+D1 & \texttt{param} 段形态（bit 段 vs 浮点向量） & \textbf{bit 段}（维持位运算统一） & \ok{已定} \\
+D2 & 总码宽 & \textbf{128 位}（$2\times$\texttt{u64} 对齐） & \ok{已定} \\
+D3 & \texttt{param} 是否参与检索 & \textbf{不参与}（仅前 64 位） & \ok{已定} \\
+D4 & 符号合成方式 & $s=\text{mask}(\texttt{sim})\odot p$ & \ok{已定} \\
+D5 & \texttt{param} 初始化 & 块常数，块宽 8 & 待验证 \\
+D6 & 基矩阵 $k$ 与秩 $r$ & $k=64$，$r=32$（起点） & 待调参 \\
+\textbf{D7} & \textbf{激活二值化的目的与 scale 机制} & 见 \S\ref{sec:d7}，\warn{需作者决断} & \warn{未决} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =====================================================================
+\section{待确认清单}
+
+\begin{enumerate}
+\item \textbf{D7}（\S\ref{sec:d7}）：激活二值化的目的是「计算与检索统一」还是「省推理算力」？
+      这决定浮点基是否仍然必要，以及 scale 机制如何设计。\warn{唯一可能影响架构可行性的未决项。}
+\item \textbf{最新仓库代码}：作者将提供。拿到后须按 \S\ref{sec:snapshot} 逐项复核，
+      特别是\textbf{二进制格式与位布局}——若已变更，\S\ref{sec:snapshot} 与 Rust 解析器需同步修改。
+\item \textbf{Prop.3 订正补丁}：是否需要一个落在 \texttt{docs/} 下的 LaTeX patch（不修改
+      \texttt{F:\textbackslash HSH\_64} 原目录）？
+\item \textbf{快照的协作方式}：只读参考，还是直接在其上迭代？后者需把 \S\ref{sec:risks} 的目录结构改为 workspace 形式。
+\end{enumerate}
+
+\vspace{0.6cm}
+\begin{center}
+\color{rulegray}\rule{0.6\textwidth}{0.4pt}
+\end{center}
+\begin{center}
+\small\itshape
+本文档所有环境探测结论均来自本机实跑。未经验证的技术判断已明确标注为「建议」或「待验证」，
+未作推测性结论。
+\end{center}
+
+\end{document}

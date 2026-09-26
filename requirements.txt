@@ -1,0 +1,41 @@
+# Cabinet-BNN 运行依赖
+# Python 3.11.9 实测通过。版本为本项目实际使用的版本。
+#
+# ⚠️ 关于 PyTorch 的 CUDA 版本：
+#    本机使用 torch 2.5.1+cu121（CUDA 12.1 构建）。"+cu121" 这类本地版本号在
+#    普通 PyPI 上不存在，直接写进 requirements.txt 会导致 pip 解析失败。
+#    请先按你的 CUDA 版本单独安装 torch，再安装本文件的其余依赖：
+#
+#      # CUDA 12.1
+#      pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
+#      # 仅 CPU
+#      pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+#      # 装完再执行：
+#      pip install -r requirements.txt
+#
+# 关于 torch 版本与旧式 .bin 检查点：
+#    torch >= 2.6 用 weights_only=True 时会拒绝加载旧式 .bin。
+#    本机为 2.5.1，因此 tools/convert_bge_to_safetensors.py 用默认参数绕过该限制。
+#    若你使用 torch >= 2.6，该脚本依然可用。
+
+# ---- 核心 ----
+numpy==2.4.6
+scipy==1.17.1
+safetensors==0.8.0
+
+# ---- 模型与分词 ----
+transformers==5.13.1
+sentence-transformers==5.6.0
+tokenizers==0.22.2
+huggingface-hub==1.23.0
+
+# ---- 实验与可视化 ----
+scikit-learn==1.9.0
+matplotlib==3.11.0
+
+# ---- 数据处理 ----
+jieba==0.42.1
+
+# ---- 文档工具（可选，生成 PDF 报告时需要）----
+pdfplumber==0.11.10
+pypdfium2==5.11.0
