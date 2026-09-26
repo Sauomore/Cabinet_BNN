@@ -83,3 +83,8 @@ wikipedia_cn/
 # ---- 运行时日志 ----
 logs/
 
+
+# ---- 临时文件（commit message / 拆分脚本等）
+_cmsg.txt
+_*.py
+
