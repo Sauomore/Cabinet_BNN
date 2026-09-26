@@ -1,0 +1,85 @@
+# ---- 数据与语料（严禁提交，合计 >16 GB）----
+data/
+*.bin
+*.jsonl
+*.parquet
+tokenizer_sample.txt
+text_all.txt
+text.txt
+
+# ---- 模型与训练产物 ----
+models/
+results/
+checkpoints/
+*.pt
+*.pth
+*.safetensors
+*.ckpt
+
+# ---- 第三方参考实现（不混入本仓库）----
+reference/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+ENV/
+
+# ---- 测试与覆盖率 ----
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 编辑器与 IDE ----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---- 操作系统 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- LaTeX 中间产物（保留 .tex 与 .pdf）----
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
+# ---- 临时调试文件 ----
+_tmp*.py
+_dbg*.py
+_test*.py
+_chk*.py
+*.tmp
+
+# ---- PDF 文本提取产物（由 References/*.pdf 生成，可从源头重建）----
+_paper.txt
+
+# ---- 作者的论文 PDF/LaTeX（发布前由作者决定是否纳入）----
+# 若要随仓库发布论文，删掉下面这行并在 README 中链接
+References/
+
+# ---- 可选：数据下载目录 ----
+wikipedia_cn/
+
+# ---- ����ʱ��־ ----
+logs/
+
