@@ -250,7 +250,9 @@ class CodeTransformerBlock(nn.Module):
                  ffn_mode: str = "global", dropout: float = 0.0,
                  use_rope: bool = True, max_len: int = 512,
                  relation_gate: bool = False, n_relation: int = 0,
-                 relation_dim: int = 16, relation_heads: int = 1):
+                 relation_dim: int = 16, relation_heads: int = 1,
+                 moe_d_ff: int = 256, moe_k: int = 16,
+                 moe_k_active: int = 4, moe_rank: int = 16):
         super().__init__()
         self.norm1 = nn.RMSNorm(d_model) if hasattr(nn, "RMSNorm") else nn.LayerNorm(d_model)
         self.attn = CausalSelfAttention(
@@ -269,6 +271,15 @@ class CodeTransformerBlock(nn.Module):
             assert code_table is not None, "ffn_mode='code' 需要 code_table"
             self.code_ffn = CodeWeightLinear(d_model, d_ff, code_table, use_scale=True)
             self.w2 = nn.Linear(d_ff, d_model, bias=False)
+        elif ffn_mode == "moe":
+            # MoE 式稀疏 FFN：路由由码决定，零额外路由参数
+            from .moe_ffn import MoEConfig, MoECodeFFN
+            assert code_table is not None, "ffn_mode='moe' 需要 code_table"
+            self.code_ffn = MoECodeFFN(
+                MoEConfig(d_model=d_model, d_ff=moe_d_ff,
+                          k_experts=moe_k, k_active=moe_k_active,
+                          rank=moe_rank), code_table)
+            self.w2 = None            # MoE 模块自带 down 投影
         else:
             raise ValueError(f"未知 ffn_mode: {ffn_mode}")
 
@@ -287,6 +298,12 @@ class CodeTransformerBlock(nn.Module):
         hn = self.norm2(x)
         if self.ffn_mode == "global":
             x = x + self.w2(F.silu(self.w1(hn)))
+        elif self.ffn_mode == "moe":
+            # 按位置施加稀疏码权重：展平成 (B*L, d)，token 索引同步扩展
+            B, L, d = hn.shape
+            wid = self._ffn_token_ids(hn, token_ids, word_ids)
+            hf = self.code_ffn(hn.reshape(B * L, d), wid).reshape(B, L, -1)
+            x = x + hf
         else:
             # 按位置施加码权重：把 (B,L,d) 展平成 (B*L,d)，word_ids 同步扩展
             B, L, d = hn.shape
@@ -295,6 +312,34 @@ class CodeTransformerBlock(nn.Module):
             wid = word_ids.unsqueeze(1).expand(B, L).reshape(-1)
             hf = self.code_ffn(hn.reshape(B * L, d), wid).reshape(B, L, -1)
             x = x + self.w2(F.silu(hf))
+        return x, new_cache
+
+    @staticmethod
+    def _ffn_token_ids(hn, token_ids, word_ids):
+        """MoE 前向需要的逐位置 token 索引，展平为 (B*L,)。
+
+        优先用 token_ids（逐位置）；缺省退回 word_ids（逐序列广播）。
+
+        ⚠️ 必须把 token_ids 对齐到【本次前向的位置数】。生成时走 KV cache，
+        hn 只有 1 个位置而 token_ids 是完整序列 —— 直接 reshape(-1) 会得到
+        长度不匹配的张量（曾报 512 vs 1024）。这与关系门踩的是同一类坑：
+        L 是「本次前向的 query 数」，不是序列长度。
+        """
+        B, L, _ = hn.shape
+        if token_ids is not None:
+            ids = token_ids
+            if ids.dim() == 1:
+                ids = ids.unsqueeze(0)
+            if ids.shape[1] != L:
+                # 本次 query 对应序列末尾的 L 个位置
+                ids = ids[:, -L:]
+            if ids.shape[1] != L:
+                raise ValueError(
+                    f"token_ids 长度 {ids.shape[1]} 与位置数 {L} 不匹配")
+            return ids.reshape(-1)
+        if word_ids is not None:
+            return word_ids.unsqueeze(1).expand(B, L).reshape(-1)
+        raise ValueError("ffn_mode='moe' 需要 token_ids 或 word_ids")
         return x, new_cache
 
 
@@ -314,11 +359,16 @@ class TransformerConfig:
     dropout: float = 0.0
     use_rope: bool = True
     attn_mode: str = "global"        # global | code | hybrid
-    ffn_mode: str = "global"         # global | code
+    ffn_mode: str = "global"         # global | code | moe
     k_basis: int = 8
     rank: int = 32
     param_bits: int = 64
     tie_embedding: bool = True
+    # ---- MoE ----
+    moe_d_ff: int = 256              # 每个专家的中间维度
+    moe_k: int = 16                  # 专家（基矩阵）总数
+    moe_k_active: int = 4            # 每 token 激活几个
+    moe_rank: int = 16               # 每个专家的低秩
     # ---- 双向关系门 ----
     relation_gate: bool = False      # 是否启用 token 间关系门
     relation_dim: int = 16           # 关系向量维度 r
@@ -345,7 +395,7 @@ class BNNTransformerLM(nn.Module):
 
         # 权重码表（仅当需要 per-token 机制时创建）
         self.code_table = None
-        if cfg.ffn_mode == "code" or cfg.attn_mode in ("code", "hybrid"):
+        if cfg.ffn_mode in ("code", "moe") or cfg.attn_mode in ("code", "hybrid"):
             from .model import WeightCodeConfig
             wcfg = WeightCodeConfig(k_basis=cfg.k_basis, rank=cfg.rank,
                                     param_bits=cfg.param_bits)
@@ -359,7 +409,10 @@ class BNNTransformerLM(nn.Module):
                                  relation_gate=cfg.relation_gate,
                                  n_relation=cfg.n_words,
                                  relation_dim=cfg.relation_dim,
-                                 relation_heads=cfg.relation_heads)
+                                 relation_heads=cfg.relation_heads,
+                                 moe_d_ff=cfg.moe_d_ff, moe_k=cfg.moe_k,
+                                 moe_k_active=cfg.moe_k_active,
+                                 moe_rank=cfg.moe_rank)
             for _ in range(cfg.n_layers)
         ])
         self.norm_f = nn.RMSNorm(d) if hasattr(nn, "RMSNorm") else nn.LayerNorm(d)
