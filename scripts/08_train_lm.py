@@ -130,9 +130,16 @@ def main() -> int:
     ap.add_argument("--dtype", default="fp16", choices=["fp16", "bf16", "fp32"])
     ap.add_argument("--seed", type=int, default=1337)
     ap.add_argument("--out-dir", type=Path, default=ROOT / "results/lm")
-    ap.add_argument("--ffn-mode", default="global", choices=["global", "code"])
+    ap.add_argument("--ffn-mode", default="global", choices=["global", "code", "moe"])
     ap.add_argument("--k-basis", type=int, default=8)
     ap.add_argument("--rank", type=int, default=32)
+    # ---- MoE ----
+    ap.add_argument("--moe-d-ff", type=int, default=256,
+                    help="每个专家的中间维度")
+    ap.add_argument("--moe-k", type=int, default=16, help="专家（基矩阵）总数")
+    ap.add_argument("--moe-k-active", type=int, default=4,
+                    help="每个 token 激活几个专家")
+    ap.add_argument("--moe-rank", type=int, default=16, help="每个专家的低秩")
     ap.add_argument("--resume", type=Path, default=None)
     # ---- 关系门 ----
     ap.add_argument("--relation-gate", action="store_true",
@@ -145,6 +152,9 @@ def main() -> int:
                     help="从该 checkpoint 【只加载模型权重】后开始新训练"
                          "（优化器与步数重置）。与 --resume 的区别："
                          "--resume 是继续同一轮，--init-from 是换配置重新开始")
+    ap.add_argument("--allow-partial-init", action="store_true",
+                    help="允许 --init-from 时部分权重缺失（例如换 FFN 类型）。"
+                         "注意力主干仍然必须完整匹配，否则拒绝继续")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -178,6 +188,8 @@ def main() -> int:
         relation_gate=args.relation_gate,
         relation_dim=args.relation_dim,
         relation_heads=args.relation_heads,
+        moe_d_ff=args.moe_d_ff, moe_k=args.moe_k,
+        moe_k_active=args.moe_k_active, moe_rank=args.moe_rank,
     ).to(device)
     ps = model.n_params()
     print(f"[模型] {args.preset}  d={model.cfg.d_model} layers={model.cfg.n_layers} "
@@ -188,8 +200,32 @@ def main() -> int:
         n_rel = sum(p.numel() for k, p in model.named_parameters() if "rel_" in k)
         print(f"       双向关系门: 开启  r={args.relation_dim}  "
               f"heads={args.relation_heads}  参数 {n_rel:,}")
+    if args.ffn_mode == "moe":
+        n_moe = sum(p.numel() for k, p in model.named_parameters()
+                    if "code_ffn" in k)
+        print(f"       MoE: k={args.moe_k} k'={args.moe_k_active} "
+              f"d_ff={args.moe_d_ff} rank={args.moe_rank}  参数 {n_moe:,}")
 
-    # 参数量与数据量的配比诊断
+    # ---- 码初始化 ----
+    # 踩过的坑：WeightCodeTable 的 hash_code 是【初始化为全零】的缓冲区，
+    # 必须显式初始化才有值。MoE 直接拿它取模路由 —— 全零会导致取模恒为 0，
+    # 16 个专家只用 4 个，而且【不报任何错】。
+    # 注意：必须在载入 checkpoint 之前做，否则会覆盖已保存的码。
+    if model.code_table is not None:
+        with torch.no_grad():
+            n_uniq = int(torch.unique(model.code_table.hash_code).numel())
+        if n_uniq < 2:
+            gen = torch.Generator().manual_seed(args.seed)
+            h_new = torch.randint(0, 2 ** 62, (model.code_table.hash_code.numel(),),
+                                  generator=gen, dtype=torch.int64)
+            model.code_table.set_hash_from_u64(h_new)
+            model.code_table.refresh_codes()
+            print(f"[码初始化] hash_code 原为 {n_uniq} 个唯一值 -> 已重新生成")
+            print(f"           [注意] 当前是随机码。接真实 HSH 码时替换 "
+                  f"set_hash_from_u64 的输入即可。")
+        else:
+            print(f"[码初始化] 沿用已载入的码（{n_uniq:,} 个唯一值）")
+
     tokens_per_param = train.n / max(ps["total"], 1)
     chinchilla = ps["total"] * 20
     print(f"       tokens/param = {tokens_per_param:.1f}  "
@@ -222,22 +258,54 @@ def main() -> int:
         sd = ck["model"]
         missing, unexpected = model.load_state_dict(sd, strict=False)
         rel_missing = [k for k in missing if "rel_" in k]
-        other_missing = [k for k in missing if "rel_" not in k]
+        moe_missing = [k for k in missing if "code_ffn" in k]
+        # code_table 的缓冲区（hash_code / param_code / ...）在旧 checkpoint 里
+        # 可能不存在（旧模型未启用 per-token 机制）。它们不是模型权重，
+        # 初始化后即可用，不该算作「配置不匹配」。
+        ct_missing = [k for k in missing if "code_table" in k]
+        other_missing = [k for k in missing
+                         if "rel_" not in k and "code_ffn" not in k
+                         and "code_table" not in k]
         print(f"[初始化] 从 {args.init_from.name} 加载模型权重")
-        print(f"         缺失 {len(missing)} 项（其中关系门 {len(rel_missing)} 项）"
-              f"，多余 {len(unexpected)} 项")
+        print(f"         缺失 {len(missing)} 项（关系门 {len(rel_missing)}，"
+              f"MoE/FFN {len(moe_missing)}，码表缓冲 {len(ct_missing)}，"
+              f"其它 {len(other_missing)}），多余 {len(unexpected)} 项")
+        if unexpected:
+            print(f"         [提示] 未使用的新增键: {unexpected[:5]}")
         if other_missing:
-            print(f"         [警告] 非关系门的权重要缺失 {len(other_missing)} 项: "
+            print(f"         [错误] 注意力主干等关键权重要缺失 {len(other_missing)} 项: "
                   f"{other_missing[:5]}")
             raise SystemExit("配置不匹配，拒绝继续（避免训练出无意义的结果）")
+        if moe_missing and not args.allow_partial_init:
+            print(f"         [错误] FFN 权重要缺失 {len(moe_missing)} 项。"
+                  f"换 FFN 类型时请加 --allow-partial-init（FFN 将为随机初始化）")
+            raise SystemExit("拒绝继续")
         print(f"         原 checkpoint step={ck.get('step', '?')}  "
               f"val_loss={ck.get('val_loss', float('nan')):.4f}")
+        if moe_missing:
+            print(f"         [注意] FFN 为【随机初始化】，注意力主干沿用原权重")
     if args.resume and args.resume.exists():
         ck = torch.load(args.resume, map_location=device, weights_only=False)
         model.load_state_dict(ck["model"])
         opt.load_state_dict(ck["opt"])
         start_step = ck["step"]
         print(f"[恢复] 从 step {start_step} 继续")
+
+    # ---- MoE 路由硬性检查（必须在码与权重都就位之后）----
+    # 静默坍缩是本模块最容易出的问题：路由用不对，16 个专家只用 4 个，
+    # 而代码不会报任何错。因此在开训前主动断言。
+    if args.ffn_mode == "moe":
+        mo = model.blocks[0].code_ffn
+        st = mo.usage_stats()
+        print(f"[路由检查] 归一化熵 {st['entropy_norm']:.4f} (1.0=完全均衡)  "
+              f"使用专家 {st['experts_used']}/{st['experts_total']}  "
+              f"最大占比 {st['max_share']:.3f} 最小占比 {st['min_share']:.3f}")
+        try:
+            mo.assert_no_collapse()
+            print(f"           -> 通过：无坍缩，每个专家都被用到")
+        except RuntimeError as e:
+            print(f"           -> 失败：{e}")
+            raise SystemExit("拒绝用坍缩的路由开始训练")
 
     # ---- 训练 ----
     rng = np.random.default_rng(args.seed)
