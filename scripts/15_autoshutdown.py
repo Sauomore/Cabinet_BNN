@@ -39,7 +39,9 @@ except Exception:
 
 ROOT = Path(__file__).resolve().parent.parent
 LOG_DIR = ROOT / "logs"
-TRAIN_DIR = ROOT / "results/lm_base_1ep"
+#: 默认训练目录。**必须能用 --train-dir 覆盖** ——
+#: 曾因硬编码，守护盯的是上一个实验的目录，新训练永远不会触发关机。
+DEFAULT_TRAIN_DIR = ROOT / "results/lm_base_1ep"
 
 
 def sh(cmd: list[str], timeout: int = 20) -> str:
@@ -102,7 +104,18 @@ def main() -> int:
     ap.add_argument("--buffer-seconds", type=int, default=180,
                     help="所有条件满足后再等多久，让日志与磁盘刷干净")
     ap.add_argument("--interval", type=int, default=60, help="检查间隔（秒）")
+    ap.add_argument("--train-dir", type=Path, default=DEFAULT_TRAIN_DIR,
+                    help="要监视的训练输出目录（含 final.pt / train_history.json）。"
+                         "换实验时【必须】指定，否则会盯着上一个实验的目录"
+                         "而永不触发关机。")
     args = ap.parse_args()
+
+    TRAIN_DIR = args.train_dir
+    if not TRAIN_DIR.exists():
+        raise SystemExit(
+            f"训练目录不存在: {TRAIN_DIR}\n"
+            f"请用 --train-dir 指定正确的输出目录（与 08_train_lm.py 的 "
+            f"--out-dir 一致）。")
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     logf = LOG_DIR / "shutdown.log"
@@ -116,6 +129,8 @@ def main() -> int:
     emit("=" * 60)
     emit(f"自动关机守护启动  dry_run={args.dry_run}  最长等待 {args.max_hours}h")
     emit(f"  训练目录 {TRAIN_DIR}")
+    emit(f"  判据: final.pt 稳定 {args.stable_checks} 次 + "
+         f"train_history.json 存在 + 训练进程退出 + {args.buffer_seconds}s 缓冲")
 
     final_pt = TRAIN_DIR / "final.pt"
     history = TRAIN_DIR / "train_history.json"

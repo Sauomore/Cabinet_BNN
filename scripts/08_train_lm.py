@@ -155,6 +155,12 @@ def main() -> int:
     ap.add_argument("--allow-partial-init", action="store_true",
                     help="允许 --init-from 时部分权重缺失（例如换 FFN 类型）。"
                          "注意力主干仍然必须完整匹配，否则拒绝继续")
+    ap.add_argument("--reset-ffn", action="store_true",
+                    help="与 --init-from 配合：加载主干权重后，把 FFN 重新随机初始化。"
+                         "用于公平消融 —— 让「标准 FFN」与「代码生成 FFN / MoE」"
+                         "从【同一个起点】出发，唯一差异只有 FFN 类型。"
+                         "若不重置，对照组的 FFN 是已训练的，实验组是随机的，"
+                         "两组不可比（这是之前实验作废的原因）。")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -284,6 +290,44 @@ def main() -> int:
               f"val_loss={ck.get('val_loss', float('nan')):.4f}")
         if moe_missing:
             print(f"         [注意] FFN 为【随机初始化】，注意力主干沿用原权重")
+
+        # ---- 公平消融：把 FFN 重新随机初始化 ----
+        # 动机：对照组若保留【已训练】的 FFN，而实验组是【随机】的，
+        #       两组就不可比 —— 实验组要先花很多步把 FFN 学回来。
+        #       之前 MoE 的对比正是因此作废（step 1000 时 val_loss 4.55
+        #       vs 对照 2.97，还在重学 FFN）。
+        # 本选项让两组都从随机 FFN 出发，唯一差异只剩 FFN 的类型。
+        if args.reset_ffn:
+            reset_n = 0
+            reset_params = 0
+            # (a) 标准 Linear 层（global 模式的 w1/w2，MoE 的 down）
+            for name, mod in model.named_modules():
+                if isinstance(mod, nn.Linear) and any(
+                        name.endswith(s) for s in ("w1", "w2", "down")):
+                    std = getattr(mod, "_reset_std", 0.02)
+                    nn.init.normal_(mod.weight, std=std)
+                    reset_n += 1
+                    reset_params += mod.weight.numel()
+            # (b) code / MoE FFN 的 U、V（是 Parameter，不是 Linear）
+            cfg = model.cfg
+            d_ff_eff = cfg.moe_d_ff if args.ffn_mode == "moe" else (
+                cfg.d_ff if cfg.d_ff > 0 else 4 * cfg.d_model)
+            for name, p in model.named_parameters():
+                if "code_ffn" not in name:
+                    continue
+                if name.endswith(".U"):
+                    b = (1.0 / max(d_ff_eff, 1)) ** 0.5
+                elif name.endswith(".V"):
+                    b = (1.0 / max(cfg.d_model, 1)) ** 0.5
+                else:
+                    continue
+                with torch.no_grad():
+                    p.uniform_(-b, b)
+                reset_n += 1
+                reset_params += p.numel()
+            print(f"[重置 FFN] {reset_n} 个张量、{reset_params:,} 个参数已重新随机初始化")
+            print(f"           -> 与对照组从【同一主干 + 随机 FFN】出发，"
+                  f"唯一差异是 FFN 类型")
     if args.resume and args.resume.exists():
         ck = torch.load(args.resume, map_location=device, weights_only=False)
         model.load_state_dict(ck["model"])
