@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cabinet-BNN · 对话</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1e222d; --line:#2a2f3d;
+    --fg:#e6e9ef; --dim:#8b93a7; --accent:#5b8def; --accent2:#3d6fd6;
+    --ok:#3ecf8e; --warn:#e8b339;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--fg);
+    font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",
+         "PingFang SC",sans-serif;
+    display:flex; flex-direction:column;
+  }
+  header{
+    padding:12px 20px; border-bottom:1px solid var(--line);
+    background:var(--panel); display:flex; align-items:center; gap:14px;
+    flex-wrap:wrap;
+  }
+  header h1{font-size:16px;margin:0;font-weight:600}
+  header .meta{font-size:12px;color:var(--dim);font-family:ui-monospace,monospace}
+  header .spacer{flex:1}
+  .badge{
+    font-size:11px;padding:3px 8px;border-radius:10px;
+    background:rgba(232,179,57,.15);color:var(--warn);
+    border:1px solid rgba(232,179,57,.3);
+  }
+  #chat{
+    flex:1; overflow-y:auto; padding:24px;
+    display:flex; flex-direction:column; gap:16px;
+  }
+  .msg{display:flex; gap:12px; max-width:900px; width:100%; margin:0 auto}
+  .msg .who{
+    flex:0 0 44px; font-size:12px; color:var(--dim); padding-top:4px;
+    font-family:ui-monospace,monospace; text-align:right;
+  }
+  .msg .body{
+    flex:1; background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:10px 14px; white-space:pre-wrap;
+    word-break:break-word; min-height:40px;
+  }
+  .msg.user .body{background:var(--panel2); border-color:#33405c}
+  .msg.user .who{color:var(--accent)}
+  .msg.sys .body{
+    background:transparent; border-style:dashed; color:var(--dim);
+    font-size:13px;
+  }
+  .caret{
+    display:inline-block; width:7px; height:15px; background:var(--accent);
+    vertical-align:-2px; margin-left:2px; animation:blink 1s steps(1) infinite;
+  }
+  @keyframes blink{50%{opacity:0}}
+  footer{
+    border-top:1px solid var(--line); background:var(--panel); padding:12px 20px;
+  }
+  .row{max-width:900px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
+  textarea{
+    flex:1; resize:none; min-height:52px; max-height:200px; padding:10px 12px;
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+    border-radius:10px; font:inherit; outline:none;
+  }
+  textarea:focus{border-color:var(--accent)}
+  button{
+    padding:12px 20px; border-radius:10px; border:1px solid var(--accent2);
+    background:var(--accent); color:#fff; font:inherit; font-weight:600;
+    cursor:pointer; white-space:nowrap;
+  }
+  button:hover{background:var(--accent2)}
+  button:disabled{opacity:.45; cursor:not-allowed}
+  button.ghost{
+    background:transparent; color:var(--dim); border-color:var(--line);
+    font-weight:400; padding:12px 14px;
+  }
+  button.ghost:hover{color:var(--fg); border-color:var(--dim)}
+  .opts{
+    max-width:900px;margin:10px auto 0;display:flex;gap:18px;flex-wrap:wrap;
+    font-size:12px;color:var(--dim);align-items:center;
+  }
+  .opts label{display:flex;align-items:center;gap:6px}
+  .opts input[type=range]{width:110px;accent-color:var(--accent)}
+  .opts .val{color:var(--fg);font-family:ui-monospace,monospace;min-width:34px}
+  .presets{max-width:900px;margin:8px auto 0;display:flex;gap:8px;flex-wrap:wrap}
+  .presets button{
+    background:transparent;border-color:var(--line);color:var(--dim);
+    font-weight:400;font-size:12px;padding:5px 10px;
+  }
+  .presets button:hover{color:var(--fg);border-color:var(--dim)}
+  .stat{font-size:11px;color:var(--dim);font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cabinet-BNN</h1>
+  <span class="meta" id="modelInfo">加载中…</span>
+  <span class="spacer"></span>
+  <span class="badge">基座模型 · 擅长续写，不是问答</span>
+</header>
+
+<div id="chat">
+  <div class="msg sys"><div class="who">说明</div><div class="body">这是 41.6M 参数的中文基座模型，训练目标是<b>续写</b>而不是回答问题。
+
+· 直接输入一段开头，它会往下接
+· 想要更像问答，可以写「问：…<br>答：」（语料里有这种结构）
+· 生成结果里的事实<b>不可靠</b>（例如它可能说首都是上海），这是规模限制
+· 每次回答后可以点「继续」让它接着写</div></div>
+</div>
+
+<footer>
+  <div class="row">
+    <textarea id="prompt" placeholder="输入开头，回车发送（Shift+回车换行）…"></textarea>
+    <button id="send">发送</button>
+    <button class="ghost" id="clear">清空</button>
+  </div>
+
+  <div class="presets">
+    <button data-p="">(空提示·自由生成)</button>
+    <button data-p="问：什么是机器学习？&#10;答：">问答格式</button>
+    <button data-p="今天天气">续写天气</button>
+    <button data-p="一、">列表续写</button>
+    <button data-p="他说道：">对话续写</button>
+  </div>
+
+  <div class="opts">
+    <label>长度 <input type="range" id="maxNew" min="20" max="200" step="10" value="80">
+      <span class="val" id="maxNewV">80</span></label>
+    <label>温度 <input type="range" id="temp" min="0.3" max="1.5" step="0.1" value="0.8">
+      <span class="val" id="tempV">0.8</span></label>
+    <label>top-k <input type="range" id="topK" min="0" max="200" step="10" value="40">
+      <span class="val" id="topKV">40</span></label>
+    <label>重复惩罚 <input type="range" id="rep" min="1" max="1.5" step="0.05" value="1">
+      <span class="val" id="repV">1.00</span></label>
+    <span class="stat" id="speed"></span>
+  </div>
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const chat = $('chat'), promptEl = $('prompt'), sendBtn = $('send');
+let busy = false, lastBody = null;
+
+// ---- 参数滑块 ----
+function bind(id, fmt){
+  const el = $(id), out = $(id + 'V');
+  const upd = () => out.textContent = fmt(el.value);
+  el.addEventListener('input', upd); upd();
+}
+bind('maxNew', v => v);
+bind('temp',   v => parseFloat(v).toFixed(1));
+bind('topK',   v => v == 0 ? '关' : v);
+bind('rep',    v => parseFloat(v).toFixed(2));
+
+// ---- 模型信息 ----
+fetch('/info').then(r => r.json()).then(d => {
+  const vl = (d.val_loss != null) ? d.val_loss.toFixed(4) : '?';
+  $('modelInfo').textContent =
+    `${(d.params/1e6).toFixed(1)}M 参数 · step ${d.step} · val_loss ${vl} · 词表 ${d.vocab} · ctx ${d.ctx}`;
+}).catch(() => $('modelInfo').textContent = '无法获取模型信息');
+
+// ---- 消息渲染 ----
+function addMsg(who, cls){
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.innerHTML = `<div class="who">${who}</div><div class="body"></div>`;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d.querySelector('.body');
+}
+
+// ---- 发送 ----
+async function send(continueMode){
+  if (busy) return;
+  const p = continueMode
+    ? (promptEl.dataset.last || '')
+    : promptEl.value;
+  if (!p && !continueMode) { promptEl.focus(); return; }
+
+  if (!continueMode) addMsg('你', 'user').textContent = p;
+
+  const body = addMsg('模型', 'assistant');
+  body.innerHTML = '<span class="caret"></span>';
+  promptEl.dataset.last = p;
+  promptEl.value = '';
+  busy = true; sendBtn.disabled = true; $('speed').textContent = '';
+
+  let acc = '';
+  try {
+    const resp = await fetch('/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        prompt: p,
+        max_new: +$('maxNew').value,
+        temperature: +$('temp').value,
+        top_k: +$('topK').value,
+        repetition_penalty: +$('rep').value,
+      })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true){
+      const {value, done} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream:true});
+      const parts = buf.split('\n\n');
+      buf = parts.pop();
+      for (const part of parts){
+        const line = part.trim();
+        if (!line.startsWith('data:')) continue;
+        let obj; try { obj = JSON.parse(line.slice(5).trim()); } catch(e){ continue; }
+        if (obj.info){
+          $('speed').textContent =
+            `${obj.tokens} tokens / ${obj.seconds}s = ${obj.tok_per_s} tok/s`;
+        } else {
+          acc = obj.text;
+          body.innerHTML = escapeHtml(acc) +
+            (obj.done ? '' : '<span class="caret"></span>');
+          chat.scrollTop = chat.scrollHeight;
+        }
+      }
+    }
+    body.textContent = acc;
+    lastBody = acc;
+  } catch(e){
+    body.textContent = acc + `\n[出错] ${e.message}`;
+  } finally {
+    busy = false; sendBtn.disabled = false; promptEl.focus();
+  }
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- 事件 ----
+sendBtn.onclick = () => send(false);
+$('clear').onclick = () => {
+  chat.querySelectorAll('.msg:not(.sys)').forEach(e => e.remove());
+  promptEl.value = ''; promptEl.dataset.last = ''; $('speed').textContent = '';
+  promptEl.focus();
+};
+promptEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); send(false); }
+});
+document.querySelectorAll('.presets button').forEach(b => {
+  b.onclick = () => { promptEl.value = b.dataset.p; promptEl.focus(); };
+});
+promptEl.focus();
+</script>
+</body>
+</html>
