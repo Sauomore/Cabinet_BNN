@@ -88,3 +88,15 @@ logs/
 _cmsg.txt
 _*.py
 
+
+# ---- 本地私有文件（不提交）
+.local/
+
+
+# ---- 周报（本地私有，不提交）
+.summary/
+
+
+# ---- 周报生成脚本（本地私有）
+scripts/38_weekly_summary.py
+
