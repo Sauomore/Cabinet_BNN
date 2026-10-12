@@ -1,5 +1,5 @@
 # ---- 数据与语料（严禁提交，合计 >16 GB）----
-data/
+/data/
 *.bin
 *.jsonl
 *.parquet
@@ -80,11 +80,11 @@ References/
 # ---- 可选：数据下载目录 ----
 wikipedia_cn/
 
-# ---- ����ʱ��־ ----
+# ---- 运行时日志 ----
 logs/
 
 
-# ---- ��ʱ�ļ���commit message / ��ֽű��ȣ�
+# ---- 临时文件（commit message / 拆分脚本等）
 _cmsg.txt
 _*.py
 

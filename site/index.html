@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sauomore · 项目索引</title>
+<meta name="description" content="AI 语义检索 · 离散哈希 · 智能体工具 —— 个人项目索引">
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#141925; --panel2:#1a2030; --line:#252c3d;
+    --fg:#e8ecf4; --dim:#8b95ad; --accent:#4d8df6; --accent2:#7c5cf6;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+    font:16px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI",
+    "Microsoft YaHei","PingFang SC",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{background:var(--panel2);padding:1px 6px;border-radius:4px;
+    font-size:.88em;font-family:ui-monospace,Consolas,monospace;
+    color:#93c5fd;border:1px solid var(--line)}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+
+  /* ---- 语言切换 ---- */
+  body.lang-zh .en-only{display:none !important}
+  body.lang-en .zh-only{display:none !important}
+  .lang-sw{position:fixed;top:18px;right:18px;z-index:50;display:flex;
+    background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    overflow:hidden}
+  .lang-sw button{background:none;border:none;color:var(--dim);
+    padding:7px 16px;cursor:pointer;font:inherit;font-size:13px}
+  .lang-sw button.on{background:var(--accent);color:#fff}
+
+  /* ---- 头部 ---- */
+  header{padding:96px 0 56px;position:relative;overflow:hidden}
+  header::before{content:"";position:absolute;top:-180px;left:50%;
+    transform:translateX(-50%);width:760px;height:440px;
+    background:radial-gradient(ellipse,rgba(77,141,246,.16),transparent 70%);
+    pointer-events:none}
+  h1{font-size:46px;margin:0 0 8px;letter-spacing:-1px;font-weight:700}
+  .sub{font-size:19px;color:var(--dim);margin:0 0 26px;max-width:640px}
+  .links{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+  .links a{display:inline-flex;align-items:center;gap:7px;
+    background:var(--panel);border:1px solid var(--line);border-radius:9px;
+    padding:9px 16px;color:var(--fg);font-size:14px}
+  .links a:hover{border-color:var(--accent);text-decoration:none}
+  .links a.primary{background:var(--accent);border-color:var(--accent)}
+  .stats{display:flex;gap:34px;margin-top:40px;flex-wrap:wrap}
+  .stat b{display:block;font-size:30px;font-weight:700;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .stat span{font-size:13px;color:var(--dim)}
+
+  hr.sep{border:0;border-top:1px solid var(--line);margin:0}
+
+  /* ---- 主线 ---- */
+  .thread{padding:56px 0}
+  .thread h2{font-size:24px;margin:0 0 6px}
+  .thread p.lead{color:var(--dim);margin:0 0 34px;max-width:720px}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+    gap:16px}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:20px;position:relative}
+  .step .n{font-size:12px;color:var(--accent);font-family:ui-monospace,monospace;
+    letter-spacing:1px;margin-bottom:8px}
+  .step h4{margin:0 0 6px;font-size:16px}
+  .step p{margin:0;font-size:13.5px;color:var(--dim);line-height:1.65}
+
+  /* ---- 项目 ---- */
+  .projects{padding:56px 0 80px}
+  .ph{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+    margin-bottom:22px}
+  .ph h2{font-size:24px;margin:0}
+  .ph .count{color:var(--dim);font-size:14px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px;
+    align-items:center}
+  .chip{background:var(--panel);border:1px solid var(--line);color:var(--dim);
+    padding:7px 14px;border-radius:20px;cursor:pointer;font:inherit;
+    font-size:13.5px;transition:.15s}
+  .chip:hover{color:var(--fg);border-color:var(--dim)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  #search{flex:1;min-width:190px;background:var(--panel);
+    border:1px solid var(--line);border-radius:20px;padding:8px 16px;
+    color:var(--fg);font:inherit;font-size:14px;outline:none}
+  #search:focus{border-color:var(--accent)}
+  .grid{display:grid;gap:20px;
+    grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:22px;display:flex;flex-direction:column;
+    transition:.18s;position:relative;overflow:hidden}
+  .card:hover{border-color:#33405c;transform:translateY(-2px)}
+  .card.hide{display:none}
+  .card-head{display:flex;align-items:center;gap:9px;margin-bottom:14px}
+  .dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+  .repo{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;
+    color:var(--dim);flex:1;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
+  .year{font-size:12px;color:var(--dim);font-family:ui-monospace,monospace}
+  .card h3{margin:0 0 8px;font-size:18px;line-height:1.45}
+  .tag{margin:0 0 16px;font-size:14px;color:var(--dim);line-height:1.65}
+  .langbar{display:flex;height:3px;border-radius:2px;overflow:hidden;
+    margin-bottom:16px;background:var(--panel2)}
+  .langbar span{display:block;height:100%}
+  .hl{margin:0 0 14px;padding-left:19px;font-size:13.5px;color:#c3cbdb;
+    line-height:1.8}
+  .hl li{margin-bottom:4px}
+  .note{margin:auto 0 14px;padding-top:13px;border-top:1px solid var(--line);
+    font-size:13px;color:var(--dim);font-style:italic;line-height:1.65}
+  .card-foot{display:flex;align-items:center;gap:11px;margin-top:auto;
+    padding-top:14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  .badge{font-size:11.5px;padding:2px 9px;border-radius:11px;
+    border:1px solid;white-space:nowrap}
+  .meta{font-size:12px;color:var(--dim);
+    font-family:ui-monospace,Consolas,monospace}
+  .ghost-link{margin-left:auto;font-size:13px}
+
+  /* ---- 页脚 ---- */
+  footer{border-top:1px solid var(--line);padding:40px 0 64px;
+    color:var(--dim);font-size:13.5px}
+  .disclaim{background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:16px 20px;margin-bottom:26px;font-size:13px;
+    line-height:1.8}
+  .disclaim b{color:#e8b339}
+  @media(max-width:640px){
+    h1{font-size:32px} .sub{font-size:16px}
+    header{padding:76px 0 40px} .stats{gap:22px}
+    .stat b{font-size:24px}
+  }
+</style>
+</head>
+<body class="lang-zh">
+
+<div class="lang-sw">
+  <button id="btnZh" class="on" onclick="setLang('zh')">中文</button>
+  <button id="btnEn" onclick="setLang('en')">EN</button>
+</div>
+
+<header>
+  <div class="wrap">
+    <h1>Sauomore</h1>
+    <p class="sub zh-only">
+      做离散语义表示与 AI 智能体基础设施。<br>
+      把 768 维浮点向量压成 32 位整数，再把整数的语义码用来<b>生成</b>模型参数。
+    </p>
+    <p class="sub en-only">
+      Working on discrete semantic representations and AI agent infrastructure.<br>
+      Compressing 768-dim float vectors into 32-bit integers, then using that code to
+      <b>generate</b> model parameters.
+    </p>
+    <div class="links">
+      <a class="primary" href="https://github.com/Sauomore" target="_blank" rel="noopener">GitHub ↗</a>
+      <a href="https://github.com/Sauomore/Cabinet_hsh64" target="_blank" rel="noopener">
+        <span class="zh-only">HSH-64 论文</span><span class="en-only">HSH-64 paper</span> ↗</a>
+      <a href="https://doi.org/10.5281/zenodo.21721838" target="_blank" rel="noopener">DOI ↗</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>8</b>
+        <span class="zh-only">公开项目</span><span class="en-only">Public projects</span></div>
+      <div class="stat"><b>Rust · Python · Kotlin</b>
+        <span class="zh-only">主要语言</span><span class="en-only">Main languages</span></div>
+      <div class="stat"><b>2026</b>
+        <span class="zh-only">全部项目集中在这一年</span>
+        <span class="en-only">All projects within one year</span></div>
+    </div>
+  </div>
+</header>
+
+<hr class="sep">
+
+<section class="thread">
+  <div class="wrap">
+    <h2 class="zh-only">一条主线：从数据处理到「用码生成权重」</h2>
+    <h2 class="en-only">One thread: from data processing to generating weights from code</h2>
+    <p class="lead zh-only">
+      这些项目不是孤立的。它们是一条线上的五步 —— 每一步都在解决上一步暴露的问题。
+    </p>
+    <p class="lead en-only">
+      These projects are not isolated. They are five steps along one line, each
+      solving a problem the previous one exposed.
+    </p>
+    <div class="steps">
+      <div class="step">
+        <div class="n">STEP 1</div>
+        <h4 class="zh-only">处理数据</h4><h4 class="en-only">Handle data</h4>
+        <p class="zh-only">导入 CSV、清洗、建模。发现瓶颈在于「数据太大、计算太慢」。</p>
+        <p class="en-only">Import CSV, clean, model. The bottleneck turns out to be scale.</p>
+      </div>
+      <div class="step">
+        <div class="n">STEP 2</div>
+        <h4 class="zh-only">向量化</h4><h4 class="en-only">Vectorise</h4>
+        <p class="zh-only">用嵌入做语义检索。但 768 维浮点向量的存储与比较成本很高。</p>
+        <p class="en-only">Use embeddings for semantic search — but 768-dim floats are expensive to store and compare.</p>
+      </div>
+      <div class="step">
+        <div class="n">STEP 3</div>
+        <h4 class="zh-only">压成整数</h4><h4 class="en-only">Compress to integers</h4>
+        <p class="zh-only">HSH-20：把向量变成 20 位结构化整数。检索快了 1000 倍，但精度不够。</p>
+        <p class="en-only">HSH-20: turn vectors into 20-bit structured integers. 1000x smaller, but not precise enough.</p>
+      </div>
+      <div class="step">
+        <div class="n">STEP 4</div>
+        <h4 class="zh-only">扩展到 64 位</h4><h4 class="en-only">Extend to 64 bits</h4>
+        <p class="zh-only">HSH-64：语义码从 20 位扩展到 52 位，召回率达到可用水平。</p>
+        <p class="en-only">HSH-64: expand the semantic code from 20 to 52 bits, reaching usable recall.</p>
+      </div>
+      <div class="step">
+        <div class="n">STEP 5</div>
+        <h4 class="zh-only">从码生成权重</h4><h4 class="en-only">Generate weights from code</h4>
+        <p class="zh-only">Cabinet-BNN：不再用码去「找」权重，而是用码直接<b>生成</b>权重。参数可以逐 token 替换。</p>
+        <p class="en-only">Cabinet-BNN: stop using the code to <b>find</b> weights — use it to <b>generate</b> them. Parameters become swappable per token.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+
+<section class="projects">
+  <div class="wrap">
+    <div class="ph">
+      <h2 class="zh-only">项目</h2><h2 class="en-only">Projects</h2>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="toolbar">
+      <button class="chip on" data-filter="all">
+        <span class="zh-only">全部</span><span class="en-only">All</span></button>
+      <button class="chip" data-filter="research"><span class="zh-only">研究</span><span class="en-only">Research</span></button><button class="chip" data-filter="infra"><span class="zh-only">AI 基础设施</span><span class="en-only">AI Infrastructure</span></button><button class="chip" data-filter="ai-tool"><span class="zh-only">AI 工具</span><span class="en-only">AI Tooling</span></button><button class="chip" data-filter="sci-tool"><span class="zh-only">科学计算</span><span class="en-only">Scientific Computing</span></button><button class="chip" data-filter="dev-tool"><span class="zh-only">开发工具</span><span class="en-only">Developer Tooling</span></button><button class="chip" data-filter="app"><span class="zh-only">应用</span><span class="en-only">Application</span></button>
+      <input id="search" placeholder="搜索项目 / 技术栈…">
+    </div>
+    <div class="grid" id="grid">
+    <article class="card" data-domain="app"
+             data-name="Money-Burning-alarm-colok" data-search="burn alarm · 会烧钱的闹钟 burn alarm · the alarm that spends your money money-burning-alarm-colok kotlin android">
+      <div class="card-head">
+        <span class="dot" style="background:#ef4444"></span>
+        <span class="repo">Money-Burning-alarm-colok</span>
+        <span class="year">2026</span>
+      </div>
+      <h3 class="zh-only">Burn Alarm · 会烧钱的闹钟</h3>
+      <h3 class="en-only">Burn Alarm · The Alarm That Spends Your Money</h3>
+      <p class="tag zh-only">闹钟响后 60 秒内解不出三道心算题，就用你的 LLM API 额度烧钱</p>
+      <p class="tag en-only">Fail three mental-math problems within 60 seconds and your own LLM API starts burning money</p>
+      <div class="langbar"><span style="width:93.5%;background:#3b82f6" title="Kotlin 93%"></span><span style="width:4.3%;background:#8b5cf6" title="Python 4%"></span><span style="width:2.2%;background:#06b6d4" title="PowerShell 2%"></span></div>
+      <ul class="hl zh-only"><li>闹钟响起锁定屏幕，60 秒倒计时</li><li>未解出则调用<b>你自己的</b> LLM API，以最大 <code>max_tokens</code> 持续请求，实时显示累计花费</li><li>多种防护：额度上限、失控保护、幂等计费</li><li>中英双语界面，适配 Android 15 后台启动限制</li></ul>
+      <ul class="hl en-only"><li>Full-screen lock-screen alarm with a 60-second countdown</li><li>On failure it hammers <b>your own</b> LLM API at maxed-out <code>max_tokens</code>, showing the running cost</li><li>Multiple guards: spend caps, runaway protection, idempotent billing</li><li>Bilingual UI, adapted to the Android 15 background-activity limits</li></ul>
+      <p class="note zh-only">把一个行为经济学问题（起床拖延）直接翻译成经济损失。</p>
+      <p class="note en-only">Translates a behavioural problem (not getting up) directly into a financial loss.</p>
+      <div class="card-foot">
+        <span class="badge" style="border-color:#ef4444;color:#ef4444">
+          <span class="zh-only">应用</span><span class="en-only">Application</span>
+        </span>
+        <span class="meta">Kotlin / Android</span>
+        
+        <a class="ghost-link" href="https://github.com/Sauomore/Money-Burning-alarm-colok" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </article>
+    <article class="card" data-domain="research"
+             data-name="Cabinet_BNN" data-search="cabinet-bnn · 从语义码生成权重 cabinet-bnn · generating weights from a semantic code cabinet_bnn python pytorch">
+      <div class="card-head">
+        <span class="dot" style="background:#8b5cf6"></span>
+        <span class="repo">Cabinet_BNN</span>
+        <span class="year">2026</span>
+      </div>
+      <h3 class="zh-only">Cabinet-BNN · 从语义码生成权重</h3>
+      <h3 class="en-only">Cabinet-BNN · Generating Weights from a Semantic Code</h3>
+      <p class="tag zh-only">二值激活语言模型，每个 token 的权重由 64 位语义哈希码生成，而不是从全局权重张量里查表</p>
+      <p class="tag en-only">A binary-activation LM whose per-token weights are generated from a 64-bit semantic hash code instead of looked up from a global tensor</p>
+      <div class="langbar"><span style="width:98.1%;background:#3b82f6" title="Python 98%"></span><span style="width:1.9%;background:#8b5cf6" title="HTML 2%"></span></div>
+      <ul class="hl zh-only"><li>每个 token 一个 <b>128 位权重码</b>：<code>hash(64)</code> 取自 HSH-64，<code>param(64)</code> 承载该 token 的独有信息</li><li>权重由共享低秩基矩阵合成：<code>W_t = Σ_j s_j(t)·(U_j V_jᵀ)</code>，不存在全局权重</li><li>二值激活 <code>sign(x)</code> + STE，权重保持浮点</li><li>MoE 稀疏 FFN：<b>码驱动路由</b>，零路由参数、负载天然均衡</li><li>码即索引：码的汉明距离与权重余弦相似度相关系数 <b>−0.99</b>，无需训练即可传导几何</li><li>如实记录负面结果：双向关系门实测<b>有害</b></li></ul>
+      <ul class="hl en-only"><li>A <b>128-bit weight code</b> per token: <code>hash(64)</code> from HSH-64, <code>param(64)</code> carrying token-specific information</li><li>Weights are synthesised from shared low-rank bases: <code>W_t = Σ_j s_j(t)·(U_j V_jᵀ)</code> — no global weight tensor</li><li>Binary activations <code>sign(x)</code> with STE; weights stay floating point</li><li>MoE-style sparse FFN with <b>code-driven routing</b>: zero router parameters, structurally balanced load</li><li>Code-as-index: Hamming distance correlates with weight cosine at <b>−0.99</b>, transferring geometry with no training</li><li>Negative results documented: the bidirectional relation gate is <b>measured to hurt</b></li></ul>
+      <p class="note zh-only">把 HSH-64 的码从「用来检索」推进到「用来生成参数」——这是整条线的下一站。</p>
+      <p class="note en-only">Takes the HSH-64 code from retrieval to parameter generation — the next stop on this line.</p>
+      <div class="card-foot">
+        <span class="badge" style="border-color:#8b5cf6;color:#8b5cf6">
+          <span class="zh-only">研究</span><span class="en-only">Research</span>
+        </span>
+        <span class="meta">Python / PyTorch</span>
+        <span class="meta">★ 2</span>
+        <a class="ghost-link" href="https://github.com/Sauomore/Cabinet_BNN" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </article>
+    <article class="card" data-domain="research"
+             data-name="Cabinet_hsh64" data-search="hsh-64 · 64 位可学习语义哈希 hsh-64 · 64-bit learnable semantic hashing cabinet_hsh64 rust python tex">
+      <div class="card-head">
+        <span class="dot" style="background:#8b5cf6"></span>
+        <span class="repo">Cabinet_hsh64</span>
+        <span class="year">2026</span>
+      </div>
+      <h3 class="zh-only">HSH-64 · 64 位可学习语义哈希</h3>
+      <h3 class="en-only">HSH-64 · 64-bit Learnable Semantic Hashing</h3>
+      <p class="tag zh-only">把语义码从 20 位扩展到 52 位，单个 u64 存储、单次 popcnt 比较</p>
+      <p class="tag en-only">Pushing the semantic code from 20 to 52 bits — one u64, one popcnt</p>
+      <div class="langbar"><span style="width:46.2%;background:#3b82f6" title="TeX 46%"></span><span style="width:32.6%;background:#8b5cf6" title="Python 33%"></span><span style="width:21.2%;background:#06b6d4" title="Rust 21%"></span></div>
+      <ul class="hl zh-only"><li>结构化 64 位编码：<code>feat(4) + sim(52) + abs(8)</code>，单 u64 存储</li><li>三阶段端到端训练：连续预训练 → STE 离散精调 → 召回导向贪心后处理</li><li>自适应多索引哈希（MIH），动态半径扩展</li><li>非对称距离评分，缓解符号量化的信息损失</li><li>纯 CPU 运行，训练与推理均无需 GPU</li><li>有论文与 Zenodo DOI</li></ul>
+      <ul class="hl en-only"><li>Structured 64-bit code: <code>feat(4) + sim(52) + abs(8)</code>, one u64</li><li>Three-stage training: continuous pretrain → STE fine-tune → recall-oriented greedy post-processing</li><li>Adaptive multi-index hashing with dynamic radius expansion</li><li>Asymmetric distance scoring to reduce sign-quantisation loss</li><li>CPU-only — neither training nor inference needs a GPU</li><li>Paper and Zenodo DOI available</li></ul>
+      <p class="note zh-only">本仓库是整条技术线的顶端：把前作的 20 位方案扩展到 64 位。</p>
+      <p class="note en-only">The top of this technical line: extends the earlier 20-bit scheme to 64 bits.</p>
+      <div class="card-foot">
+        <span class="badge" style="border-color:#8b5cf6;color:#8b5cf6">
+          <span class="zh-only">研究</span><span class="en-only">Research</span>
+        </span>
+        <span class="meta">Rust / Python / TeX</span>
+        <span class="meta">★ 2</span>
+        <a class="ghost-link" href="https://github.com/Sauomore/Cabinet_hsh64" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </article>
+    <article class="card" data-domain="ai-tool"
+             data-name="hakimi-codex" data-search="hakimi codex · 多智能体编程助手 hakimi codex · multi-agent coding assistant hakimi-codex python">
+      <div class="card-head">
+        <span class="dot" style="background:#06b6d4"></span>
+        <span class="repo">hakimi-codex</span>
+        <span class="year">2026</span>
+      </div>
+      <h3 class="zh-only">Hakimi Codex · 多智能体编程助手</h3>
+      <h3 class="en-only">Hakimi Codex · Multi-agent Coding Assistant</h3>
+      <p class="tag zh-only">基于工具调用架构的 CLI 编程助手，能读写文件、执行命令、协作完成开发任务</p>
+      <p class="tag en-only">A CLI coding assistant built on tool calling — reads, writes, executes, collaborates</p>
+      <div class="langbar"><span style="width:99.2%;background:#3b82f6" title="Python 99%"></span><span style="width:0.4%;background:#8b5cf6" title="Batchfile 0%"></span><span style="width:0.4%;background:#06b6d4" title="Shell 0%"></span></div>
+      <ul class="hl zh-only"><li>严格的工具调用协议（JSON over Markdown code blocks），保证稳定性</li><li>可配置 LLM 后端：切换 API 端点、模型与认证信息</li><li>流式响应，实时输出处理进度</li><li>多工具集成：读写文件、目录列表、文件搜索、命令执行</li></ul>
+      <ul class="hl en-only"><li>Strict tool-calling protocol (JSON over Markdown code blocks) for reliability</li><li>Configurable LLM backend: swap endpoint, model and credentials</li><li>Streaming responses with live progress</li><li>Multi-tool integration: file I/O, directory listing, search, command execution</li></ul>
+      <p class="note zh-only">把 LLM 的「说」变成「做」——这是 Agent 与聊天机器人的分界线。</p>
+      <p class="note en-only">Turns what an LLM says into what it does — the line between an agent and a chatbot.</p>
+      <div class="card-foot">
+        <span class="badge" style="border-color:#06b6d4;color:#06b6d4">
+          <span class="zh-only">AI 工具</span><span class="en-only">AI Tooling</span>
+        </span>
+        <span class="meta">Python</span>
+        <span class="meta">★ 3</span>
+        <a class="ghost-link" href="https://github.com/Sauomore/hakimi-codex" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </article>
+    <article class="card" data-domain="infra"
+             data-name="Cabinet" data-search="cabinet · 面向 ai agent 的语义记忆检索 cabinet · semantic memory retrieval for ai agents cabinet rust python docker">
+      <div class="card-head">
+        <span class="dot" style="background:#3b82f6"></span>
+        <span class="repo">Cabinet</span>
+        <span class="year">2026</span>
+      </div>
+      <h3 class="zh-only">Cabinet · 面向 AI Agent 的语义记忆检索</h3>
+      <h3 class="en-only">Cabinet · Semantic Memory Retrieval for AI Agents</h3>
+      <p class="tag zh-only">用 20 位结构化整数替代 768 维浮点向量，纯 CPU、可解释、可增量更新</p>
+      <p class="tag en-only">Replacing 768-dim float vectors with 20-bit structured integers — CPU-only, explainable, incremental</p>
+      <div class="langbar"><span style="width:54.7%;background:#3b82f6" title="Rust 55%"></span><span style="width:43.7%;background:#8b5cf6" title="Python 44%"></span><span style="width:0.4%;background:#06b6d4" title="Batchfile 0%"></span><span style="width:0.4%;background:#10b981" title="PowerShell 0%"></span><span style="width:0.3%;background:#f59e0b" title="Makefile 0%"></span></div>
+      <ul class="hl zh-only"><li>针对现有 RAG 的三个结构性缺陷：不可解释、更新成本高、依赖硬件</li><li>HSH-20 编码：<code>feat(4) + sim(8) + abs(8)</code>，检索路径完全可审计（类别→簇→词）</li><li>仅追加写入 + 后台 LSM 合并，新增文档无需重建索引</li><li>索引体积缩小约 <b>1000 倍</b>，笔记本即可运行</li><li>Rust 核心 + Python 绑定 + 独立 GUI</li></ul>
+      <ul class="hl en-only"><li>Targets three structural flaws in current RAG: opacity, expensive updates, hardware dependence</li><li>HSH-20 code: <code>feat(4) + sim(8) + abs(8)</code>; the retrieval path is fully auditable (category → cluster → word)</li><li>Append-only writes plus background LSM merge — no index rebuild on insert</li><li>Index size reduced by roughly <b>1000x</b>; runs on a laptop</li><li>Rust core, Python bindings, standalone GUI</li></ul>
+      <p class="note zh-only">这是 HSH-64 的前作，提出了层次语义哈希这套编码思路。</p>
+      <p class="note en-only">The predecessor of HSH-64, where the hierarchical semantic hashing idea was introduced.</p>
+      <div class="card-foot">
+        <span class="badge" style="border-color:#3b82f6;color:#3b82f6">
+          <span class="zh-only">AI 基础设施</span><span class="en-only">AI Infrastructure</span>
+        </span>
+        <span class="meta">Rust / Python / Docker</span>
+        <span class="meta">★ 1</span>
+        <a class="ghost-link" href="https://github.com/Sauomore/Cabinet" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </article>
+    <article class="card" data-domain="dev-tool"
+             data-name="Lixivium" data-search="lixivium · 可视化数据清洗 lixivium · visual data cleaning lixivium python typescript react">
+      <div class="card-head">
+        <span class="dot" style="background:#f59e0b"></span>
+        <span class="repo">Lixivium</span>
+        <span class="year">2026</span>
+      </div>
+      <h3 class="zh-only">Lixivium · 可视化数据清洗</h3>
+      <h3 class="en-only">Lixivium · Visual Data Cleaning</h3>
+      <p class="tag zh-only">拖拽连线配置清洗流程，自动生成 Pandas / SQL / PySpark 代码</p>
+      <p class="tag en-only">Drag, connect, configure — auto-generate Pandas / SQL / PySpark code</p>
+      
+      <ul class="hl zh-only"><li>React Flow 画布，拖拽式节点编排</li><li>一次编排，输出三种代码：Pandas / SQL（CTE）/ PySpark</li><li>DuckDB 驱动的实时预览</li><li>Monaco 编辑器 + 50 步撤销栈</li></ul>
+      <ul class="hl en-only"><li>React Flow canvas with drag-and-drop node orchestration</li><li>One graph, three outputs: Pandas / SQL (CTE) / PySpark</li><li>DuckDB-powered real-time preview</li><li>Monaco editor with a 50-step undo stack</li></ul>
+      <p class="note zh-only">把重复的清洗脚本变成可视流程——写一次，出三种引擎的代码。</p>
+      <p class="note en-only">Turns repetitive cleaning scripts into a visual graph — write once, emit three engines.</p>
+      <div class="card-foot">
+        <span class="badge" style="border-color:#f59e0b;color:#f59e0b">
+          <span class="zh-only">开发工具</span><span class="en-only">Developer Tooling</span>
+        </span>
+        <span class="meta">Python / TypeScript / React</span>
+        <span class="meta">★ 2</span>
+        <a class="ghost-link" href="https://github.com/Sauomore/Lixivium" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </article>
+    <article class="card" data-domain="sci-tool"
+             data-name="MindMath_Studio" data-search="mindmath studio · 科学计算平台 mindmath studio · scientific computing platform mindmath_studio python flask javascript">
+      <div class="card-head">
+        <span class="dot" style="background:#10b981"></span>
+        <span class="repo">MindMath_Studio</span>
+        <span class="year">2026</span>
+      </div>
+      <h3 class="zh-only">MindMath Studio · 科学计算平台</h3>
+      <h3 class="en-only">MindMath Studio · Scientific Computing Platform</h3>
+      <p class="tag zh-only">数据清洗 + 方程建模 + 数值求解 + 可视化，一站式 Web 平台</p>
+      <p class="tag en-only">Data cleaning, equation modelling, numerical solving and visualisation in one web platform</p>
+      
+      <ul class="hl zh-only"><li>代数方程 / ODE / PDE 交互式求解（有限差分法）</li><li>50+ 预设方程库，支持自定义方程与参数映射</li><li>缺失值与异常值处理（IQR / Z-score）</li><li>磨砂玻璃质感界面，支持实时曲线预览</li></ul>
+      <ul class="hl en-only"><li>Interactive solving of algebraic equations, ODEs and PDEs (finite difference)</li><li>50+ preset equation library, plus custom equations and parameter mapping</li><li>Missing-value and outlier handling (IQR / Z-score)</li><li>Frosted-glass UI with live curve preview</li></ul>
+      <p class="note zh-only">技术栈从数据处理起步的地方，也是后来 Cabinet 那条线的源头。</p>
+      <p class="note en-only">Where the data-processing stack started — and the origin of the line that led to Cabinet.</p>
+      <div class="card-foot">
+        <span class="badge" style="border-color:#10b981;color:#10b981">
+          <span class="zh-only">科学计算</span><span class="en-only">Scientific Computing</span>
+        </span>
+        <span class="meta">Python / Flask / JavaScript</span>
+        <span class="meta">★ 2</span>
+        <a class="ghost-link" href="https://github.com/Sauomore/MindMath_Studio" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </article>
+    <article class="card" data-domain="sci-tool"
+             data-name="-" data-search="简易数据建模软件 simple data modelling tool - python">
+      <div class="card-head">
+        <span class="dot" style="background:#10b981"></span>
+        <span class="repo">-</span>
+        <span class="year">2026</span>
+      </div>
+      <h3 class="zh-only">简易数据建模软件</h3>
+      <h3 class="en-only">Simple Data Modelling Tool</h3>
+      <p class="tag zh-only">导入 CSV、自定义方程、快速建模 —— 这条技术线的起点</p>
+      <p class="tag en-only">Import CSV, define equations, model quickly — the start of the line</p>
+      
+      <ul class="hl zh-only"><li>CSV 导入与方程自定义</li><li>仓库名暂为 <code>-</code>，无 README</li></ul>
+      <ul class="hl en-only"><li>CSV import with custom equations</li><li>Repository is currently named <code>-</code> and has no README</li></ul>
+      <p class="note zh-only">最早的仓库。名字还是个占位符，但它是后面所有工作的起点。</p>
+      <p class="note en-only">The earliest repository. Its name is still a placeholder, but everything after starts here.</p>
+      <div class="card-foot">
+        <span class="badge" style="border-color:#10b981;color:#10b981">
+          <span class="zh-only">科学计算</span><span class="en-only">Scientific Computing</span>
+        </span>
+        <span class="meta">Python</span>
+        <span class="meta">★ 1</span>
+        <a class="ghost-link" href="https://github.com/Sauomore/-" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </article></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p style="margin:0">
+      © 2026 Sauomore ·
+      <a href="https://github.com/Sauomore" target="_blank" rel="noopener">github.com/Sauomore</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+// ---- 语言切换（记忆到 localStorage）----
+function setLang(l) {
+  document.body.className = 'lang-' + l;
+  document.getElementById('btnZh').classList.toggle('on', l === 'zh');
+  document.getElementById('btnEn').classList.toggle('on', l === 'en');
+  document.documentElement.lang = (l === 'zh') ? 'zh-CN' : 'en';
+  try { localStorage.setItem('site-lang', l); } catch (e) {}
+  document.getElementById('search').placeholder =
+    (l === 'zh') ? '搜索项目 / 技术栈…' : 'Search projects / stacks…';
+  applyFilter();
+}
+try {
+  const saved = localStorage.getItem('site-lang');
+  if (saved) setLang(saved);
+  else if (!/zh/i.test(navigator.language)) setLang('en');
+} catch (e) {}
+
+// ---- 筛选 + 搜索 ----
+let curFilter = 'all';
+const cards = Array.from(document.querySelectorAll('.card'));
+
+function applyFilter() {
+  const q = (document.getElementById('search').value || '').toLowerCase().trim();
+  let n = 0;
+  cards.forEach(c => {
+    const okDom = (curFilter === 'all' || c.dataset.domain === curFilter);
+    const okQ = !q || c.dataset.search.includes(q) || c.dataset.name.toLowerCase().includes(q);
+    const show = okDom && okQ;
+    c.classList.toggle('hide', !show);
+    if (show) n++;
+  });
+  const zh = document.body.classList.contains('lang-zh');
+  document.getElementById('count').textContent =
+    zh ? (n + ' 个') : (n + ' shown');
+}
+
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.onclick = () => {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+    chip.classList.add('on');
+    curFilter = chip.dataset.filter;
+    applyFilter();
+  };
+});
+document.getElementById('search').addEventListener('input', applyFilter);
+applyFilter();
+</script>
+</body>
+</html>

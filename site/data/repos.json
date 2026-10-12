@@ -1,0 +1,631 @@
+[
+  {
+    "name": "Money-Burning-alarm-colok",
+    "description": "",
+    "url": "https://github.com/Sauomore/Money-Burning-alarm-colok",
+    "homepage": "",
+    "language": "Kotlin",
+    "languages": {
+      "Kotlin": 119121,
+      "Python": 5507,
+      "PowerShell": 2816
+    },
+    "stars": 0,
+    "forks": 0,
+    "watchers": 0,
+    "open_issues": 0,
+    "created": "2026-09-30",
+    "updated": "2026-09-30",
+    "pushed": "2026-09-30",
+    "size_kb": 1544,
+    "topics": [],
+    "license": "MIT",
+    "files": [
+      {
+        "name": ".gitattributes",
+        "type": "file",
+        "size": 598
+      },
+      {
+        "name": ".gitignore",
+        "type": "file",
+        "size": 704
+      },
+      {
+        "name": "LICENSE",
+        "type": "file",
+        "size": 1065
+      },
+      {
+        "name": "README.md",
+        "type": "file",
+        "size": 11935
+      },
+      {
+        "name": "README.zh.md",
+        "type": "file",
+        "size": 11117
+      },
+      {
+        "name": "app",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "build.gradle.kts",
+        "type": "file",
+        "size": 227
+      },
+      {
+        "name": "build.ps1",
+        "type": "file",
+        "size": 2816
+      },
+      {
+        "name": "docs",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "gradle.properties",
+        "type": "file",
+        "size": 266
+      },
+      {
+        "name": "gradle",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "gradlew",
+        "type": "file",
+        "size": 8733
+      },
+      {
+        "name": "gradlew.bat",
+        "type": "file",
+        "size": 2843
+      },
+      {
+        "name": "keystore.properties.example",
+        "type": "file",
+        "size": 651
+      },
+      {
+        "name": "settings.gradle.kts",
+        "type": "file",
+        "size": 534
+      },
+      {
+        "name": "tools",
+        "type": "dir",
+        "size": 0
+      }
+    ],
+    "recent_commits": [
+      {
+        "sha": "791b1e2",
+        "date": "2026-09-30",
+        "msg": "tools: 加 Release 发布脚本"
+      },
+      {
+        "sha": "f722ac6",
+        "date": "2026-09-30",
+        "msg": "烧钱闹钟 1.0：用真钱逼自己起床的数学闹钟"
+      },
+      {
+        "sha": "1d8bf2a",
+        "date": "2026-09-30",
+        "msg": "Initial commit"
+      }
+    ],
+    "readme": "# Burn Alarm\n\n**English** · [简体中文](README.zh.md)\n\nAn Android alarm clock that puts your own money on the line.\n\nWhen the alarm goes off you get 60 seconds to solve three mental-math problems.\nFail, and the app starts hammering your own LLM API with maxed-out `max_tokens`,\nshowing the running cost — `¥0.1384 and climbing` — until you solve the problems.\n\n> ⚠️ **This spends your real money.** The charges come out of your own API account\n> and cannot be reversed. Read the *Runaway guard* section before you enter a key.\n\n---\n\n## Screenshots\n\n| Alarm list | New alarm | Settings |\n|---|---|---|\n| ![Alarm list](docs/01-alarm-list-zh.png) | ![New alarm](docs/02-alarm-edit-zh.png) | ![Settings](docs/03-settings-zh.png) |\n\n| Ringing over the lock screen | Burning over the lock screen | Burning |\n|---|---|---|\n| ![Ring on lock screen](docs/04-ring-lockscreen-zh.png) | ![Burn on lock screen](docs/05-burning-lockscreen-zh.png) | ![Burning](docs/07-burning-zh.png) |\n\nThe UI ships in **English and Simplified Chinese**, switchable in-app\n(Settings → Language) or from the system per-app language screen.\n\n| Settings (English) | New alarm (English) | Ring (English) |\n|---|---|---|\n| ![Settings EN](docs/08-settings-en.png) | ![New alarm EN](docs/09-alarm-edit-en.png) | ![Ring EN](docs/10-ring-en.png) |\n\n---\n\n## How it works\n\n```\nAlarmManager.setAlarmClock()          ← survives Doze batching\n        │\n        ▼\nAlarmReceiver (exact alarm)\n        ├─ posts a full-screen-intent notification ──→ takes over the lock screen, wakes the display\n        ├─ startActivity fallback                    ──→ blocked by Android 15 BAL, harmless\n        └─ starts BurnService (foreground, mediaPlayback|dataSync)\n                │\n                ▼\n        ┌──────────────────────────────────────────────┐\n        │ Phase 1 · RINGING: sound + vibration + 60 s  │\n        │          ↑ solve all problems → stop now      │\n        └──────────────────────────────────────────────┘\n                │ grace period expires, still unsolved\n                ▼\n        ┌──────────────────────────────────────────────┐\n        │ Phase 2 · BURNING: one API call every 3 s,    │\n        │ live token + cost counter                    │\n        │   Alternate: roast (200 tok) ↔ waste (4096)  │\n        └──────────────────────────────────────────────┘\n                │\n                ▼ solved, or runaway guard tripped\n             everything stops\n```\n\nKey design point: **state lives in a singleton (`BurnState`), the foreground service\nadvances it, the Activity only renders it.** Either side can die without breaking the\nother, and reopening from the notification picks the session straight back up.\n\n---\n\n## Download\n\nGrab the latest `BurnAlarm-x.y.apk` from the\n[**Releases**](../../releases) page and sideload it.\n\nRequires **Android 8.0 (API 26)** or newer; targets **Android 15 (API 35)**.\n\nTwo permissions matter for it to actually work:\n\n- **Exact alarms** — the app is an alarm clock, so it declares `USE_EXACT_ALARM`\n- **Full-screen notifications** — how it takes over the lock screen\n\nOn Android 13+ the system per-app language screen also exposes English / 简体中文.\n\n---\n\n## Configuration\n\nEverything lives in Settings:\n\n| Field | Notes |\n|---|---|\n| Base URL | Any OpenAI-compatible endpoint. **No `/v1` needed — it is appended automatically.** e.g. `https://api.deepseek.com` |\n| API Key | Stored in the app's private DataStore. Never leaves the device except to the endpoint you configure. |\n| Model | e.g. `deepseek-chat` |\n| Input / output price | Copy from your provider's pricing page, in CNY per million tokens. Used only to *estimate* the on-screen cost. |\n| Burn mode | Pure burn / Roast / Alternate |\n| Max output tokens | 256–8192. **This is the main throttle on how fast money disappears.** |\n| Burn interval | One call every 1–60 s |\n| Speak the roast aloud | Uses the system TTS |\n| Continuous burn limit | See below |\n\nThere is a **Test connection** button, and a live estimate at the bottom:\n*\"At full tilt with these settings: about ¥39.32 / hour.\"* Look at it before you save.\n\n### Runaway guard\n\n**This guards against a bug causing an infinite loop. It is not here to stop you.**\n\nChoosing \"burn until solved\" is a legitimate choice, so there is **no spending cap by\ndefault**. But if the loop logic ever went wrong, it could keep burning while you sleep.\nSo there is a time limit, default **120 minutes**, and **setting it to `0` disables it\nentirely**.\n\nFor scale: at the defaults (4096 tokens, one call every 3 s, ¥8/M output) that is roughly\n**¥39/hour**. Swap in a GPT-4o-class model and it becomes **~$96/hour**. That is the\norder of magnitude the guard is for.\n\n---\n\n## Privacy\n\n**Your API key is stored only on this device. It is never uploaded to the developer,\nand there is no analytics, tracking or telemetry of any kind — this app has no server\nof its own.**\n\nThe only time it leaves the device is when burning tokens, as the credential sent to the\nendpoint **you** entered. That is how API authentication works, and where it goes is\nentirely your choice.\n\nApart from that one step, the alarms, the question generation and the answering all work\nfully offline.\n\nCorollary: a claim like \"this app needs no network\" would be false. **Burning tokens\ninherently requires network access** — otherwise there is nothing to burn.\n\n---\n\n## Build from source\n\nPrerequisites: JDK 17+, Android SDK with platform 35 and build-tools 35.0.0.\n\n```bash\ngit clone git@github.com:Sauomore/Money-Burning-alarm-colok.git\ncd Money-Burning-alarm-colok\n\n# debug build\n./gradlew assembleDebug        # Windows: gradlew.bat assembleDebug\n\n# signed release build (optional)\ncp keystore.properties.example keystore.properties   # then fill in your own keystore\n./gradlew assembleRelease\n```\n\nWithout `keystore.properties` the release build simply comes out unsigned — the build\ndoes not fail, so a fresh clone compiles out of the box.\n\n### Trying it without spending anything\n\n`tools/mock_openai.py` is a tiny fake OpenAI endpoint:\n\n```bash\npython tools/mock_openai.py 8765\n```\n\nThen point Base URL at `http://10.0.2.2:8765` (that is how an emulator reaches its host),\nput anything in the API key field, and hit **Ring now**. The token counter and the cost\nreadout move exactly as they would for real, but nothing is billed.\n\n---\n\n## Tech stack\n\n- Android Gradle Plugin `8.7.3`, Gradle `8.14`\n- Kotlin `2.0.21`, Jetpack Compose (BOM `2024.10.01`), Material 3\n- `compileSdk` / `targetSdk` 35, `minSdk` 26\n- AppCompat (only for `setApplicationLocales`), DataStore, OkHttp, kotlinx.serialization\n- No Compose Navigation dependency? Yes there is — `navigation-compose` `2.8.4`\n\n---\n\n## Things that bit us\n\n### 1. Background activity starts are hard-blocked on Android 15\n\n```\nE ActivityTaskManager: Background activity launch blocked! goo.gle/android-bal\n    [callingUidProcState: RECEIVER]              ← exact alarms are NOT exempt\nE ActivityTaskManager: Background activity launch blocked!\n    [callingUidProcState: FOREGROUND_SERVICE]    ← neither are foreground services\n```\n\n**Neither exact alarms nor foreground services are exempt from BAL.** The only supported\nway to take over the lock screen is a **full-screen-intent notification** — see\n`AlarmReceiver.postFullScreenNotification()`. The two `startActivity` fallbacks get\nsilently dropped (no exception is thrown), and are kept only for more permissive ROMs.\n\n### 2. Full-screen intents only fire when the device is genuinely locked\n\nThe system evaluates the full-screen intent at the moment the notification is **first\nposted**, and requires `isKeyguardShowing == true`.\n\n- **A device or emulator with no lock screen** never enters the locked state, so the\n  full-screen intent never fires.\n- **When the app is already in the foreground**, you only get a heads-up notification.\n- Calling `notify()` on the same id every second does **not** re-trigger it.\n\nSet a PIN or pattern on a real phone, or the app's bite is much weaker than intended.\n\n### 3. Project paths must be ASCII\n\nAGP refuses non-ASCII paths on Windows outright, so this project lives in an\nASCII directory. Do not move it under a path with Chinese characters.\n\n### 4. Cleartext HTTP is blocked by default\n\nAndroid 9+ blocks it. This app opts out via `res/xml/network_security_config.xml`,\nbecause plenty of people will point it at a LAN Ollama / LM Studio instance.\nThe trade-off is that the API key travels in the clear over `http://` — Settings shows\nan explicit warning when you use it, and public endpoints should be `https://`.\n\n### 5. PowerShell scripts need a UTF-8 BOM\n\nThe bundled `build.ps1` contains non-ASCII text that Windows PowerShell 5.1 would read as\nGBK and garble. It carries a UTF-8 BOM — **do not lose it when editing.**\n\n### 6. A placeholder default in a StateFlow can eat the user's config\n\n`AlarmViewModel.settings` **must** start as `null`, not `AppSettings()`.\n\nWith `AppSettings()` as the initial value, the Settings screen's `LaunchedEffect` treats\nthat synthetic default as the real config and fills the draft with it, while the actual\nDataStore value is still loading asynchronously. The consequence: **open Settings and hit\nback before the read finishes, and the saved API key is overwritten with an empty\ndefault.**\n\nThe fix is `stateIn(..., SharingStarted.Eagerly, null)`, a spinner (not the form) while\n`stored == null`, and an `if (loaded)` guard on the back button as a second line of\ndefence.\n\n---\n\n## Known limitations\n\n- If the process is killed mid-burn, the burn does not resume automatically — a restarted\n  `BurnService` with no `alarmId` shuts itself down rather than leaving an unstoppable\n  foreground service behind.\n- Some OEM ROMs block full-screen intents. Working around that needs a\n  `SYSTEM_ALERT_WINDOW` overlay fallback (show a 1×1 overlay so\n  `callingUidHasNonAppVisibleWindow` becomes true, then start the Activity).\n  Not implemented yet.\n- The displayed cost is an **estimate** based on the prices you enter. It is not a bill.\n\n---\n\n## Repository layout\n\n```\n.\n├── app/src/main/\n│   ├── java/com/dsh/burnalarm/\n│   │   ├── MainActivity.kt\n│   │   ├── BurnAlarmApp.kt            notification channels\n│   │   ├── alarm/                     AlarmScheduler · AlarmReceiver · BootReceiver\n│   │   ├── burn/                      BurnState · LlmClient · BurnService\n│   │   ├── ring/RingActivity.kt       full-screen lock-screen ring + math\n│   │   ├── math/MathGenerator.kt      three difficulty tiers\n│   │   ├── data/                      Alarm · AppSettings · AlarmRepository\n│   │   ├── i18n/AppLocale.kt          per-app language switching\n│   │   └── ui/                        list · editor · settings · theme · labels\n│   └── res/\n│       ├── values/strings.xml         English (default)\n│       ├── values-zh/strings.xml      简体中文\n│       ├── xml/locales_config.xml\n│       └── xml/network_security_config.xml\n├── tools/mock_openai.py               fake API for zero-cost testing\n├── docs/                              screenshots\n├── keystore.properties.example\n└── build.ps1                          one-shot build script (Windows)\n```\n\n---\n\n## License\n\n[MIT](LICENSE)\n\nUse it, fork it, ship it. Just do not blame anyone but yourself for the bill.\n"
+  },
+  {
+    "name": "Cabinet_BNN",
+    "description": "",
+    "url": "https://github.com/Sauomore/Cabinet_BNN",
+    "homepage": "",
+    "language": "Python",
+    "languages": {
+      "Python": 482965,
+      "HTML": 9523
+    },
+    "stars": 2,
+    "forks": 0,
+    "watchers": 2,
+    "open_issues": 0,
+    "created": "2026-09-26",
+    "updated": "2026-09-29",
+    "pushed": "2026-09-29",
+    "size_kb": 2840,
+    "topics": [],
+    "license": "MIT",
+    "files": [
+      {
+        "name": ".gitignore",
+        "type": "file",
+        "size": 1427
+      },
+      {
+        "name": "LICENSE",
+        "type": "file",
+        "size": 1065
+      },
+      {
+        "name": "README.md",
+        "type": "file",
+        "size": 4546
+      },
+      {
+        "name": "README.zh.md",
+        "type": "file",
+        "size": 3968
+      },
+      {
+        "name": "cabinet_bnn",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "docs",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "requirements.txt",
+        "type": "file",
+        "size": 1416
+      },
+      {
+        "name": "scripts",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "tools",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "web",
+        "type": "dir",
+        "size": 0
+      }
+    ],
+    "recent_commits": [
+      {
+        "sha": "5402cf1",
+        "date": "2026-09-29",
+        "msg": "Add corpus diagnostics, fact-probe gate, and corpus filter; ignore local-only files"
+      },
+      {
+        "sha": "ec730d2",
+        "date": "2026-09-27",
+        "msg": "POSTMORTEM: the corpus rewrite failed and made the base model worse"
+      },
+      {
+        "sha": "2dd2df7",
+        "date": "2026-09-26",
+        "msg": "Fix corpus ratio: instruction data 89% -> 25% with measured quotas"
+      },
+      {
+        "sha": "7c52574",
+        "date": "2026-09-26",
+        "msg": "Add GitHub About-field copy (docs/PROJECT_DESCRIPTION.md)"
+      },
+      {
+        "sha": "630ce72",
+        "date": "2026-09-26",
+        "msg": "Add acceptance criteria to DESIGN docs (EN + ZH)"
+      }
+    ],
+    "readme": "# Cabinet-BNN\n\n**English** ｜ [中文](README.zh.md)\n\n> A binary-activation language model whose per-token weights are generated from a\n> **structured 64-bit semantic hash code**, instead of being looked up from a global\n> weight tensor.\n\n[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)\n[![HSH-64](https://img.shields.io/badge/based%20on-HSH--64-informational)](https://github.com/Sauomore/Cabinet_hsh64)\n\n---\n\n### What this is\n\nCabinet-BNN explores a single question:\n\n> **Can a token's weight matrix be *generated from* a compact discrete code, instead of\n> being looked up from a global weight tensor?**\n\nConcretely, each token `t` gets a **128-bit weight code**:\n\n```\nhash segment (64 bit)  =  feat(4) + sim(52) + abs(8)     ← the HSH-64 retrieval code\nparam segment (64 bit) =  per-token information code      ← new in this project\n```\n\nand its weight matrix is built from shared basis matrices:\n\n```\ns_j(t) = mask_j(hash_t) · p_t[j]                 (+1 / −1)\nW_t    = Σ_j s_j(t) · (U_j V_jᵀ)                 shared low-rank basis\ny      = sign(W_t x) · scale                     binary activation + STE\n```\n\nThe `hash` segment comes from [HSH-64](https://github.com/Sauomore/Cabinet_hsh64) (the\nauthor's previous work), which maps embeddings to a 64-bit code where **Hamming distance\n≈ semantic distance**, queryable in one `popcnt`.\n\n\n### At a glance\n\n| component | state |\n|---|---|\n| HSH-64 codec + greedy bit-flip post-processing | ✅ verified against the paper (Recall@10 0.7426) |\n| Causal attention + RoPE + KV cache | ✅ regression-tested |\n| Code-generated FFN, low-rank and memory-efficient | ✅ regression-tested |\n| Bidirectional attention relation gate | ✅ implemented — ❌ **measured to hurt** |\n| MoE-style sparse FFN, code-driven routing | ✅ implemented and tested — ⬜ fair comparison pending |\n| Code-as-index geometry transfer | ✅ verified with no training needed |\n| Language model (41.6 M) | ✅ val_loss 3.0111 / ppl 20.3 |\n| BNN mechanism wired into the trained LM | ⬜ **in progress** |\n\n**Documents**\n\n| | |\n|---|---|\n| **[Results & Findings](docs/RESULTS.md)** | every measured number, including negative results |\n| **[Design & Research Direction](docs/DESIGN.md)** | the idea, what constrains it, the open problem |\n| **[Architecture & Reproduction](docs/ARCHITECTURE.md)** | layout, install, full pipeline |\n| **[Testing, Status & Known Issues](docs/TESTING.md)** | correctness suites, what works, what does not |\n\n> ⚠️ **Two things this project does *not* claim**, both measured:\n> the bidirectional relation gate makes the language model **worse**, and the\n> zero forgetting from per-domain code tables comes from **physical isolation**\n> (capacity cost), not from a new mechanism. See\n> [RESULTS.md](docs/RESULTS.md) for the controlled comparisons.\n\n### Why\n\nTwo motivations, and they should be kept separate:\n\n| Goal | Status |\n|---|---|\n| **Lower cost** — binary activations, low-rank generated weights | Measured — see [RESULTS.md](docs/RESULTS.md) |\n| **Editable parameters** — flip one bit to change weights; each domain keeps its own code table | Demonstrated on a small scale |\n\n> ⚠️ **Binary ≠ brain-like.** Binarisation buys *cost*, not *intelligence*. The property\n> that actually matters for continual learning is **locality** of updates — see\n> [Design & Research Direction](docs/DESIGN.md).\n\n### Quick start\n\n```bash\ngit clone https://github.com/Sauomore/Cabinet_BNN.git\ncd Cabinet_BNN\npip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121\npip install -r requirements.txt\n\npython -m cabinet_bnn.paths                      # check path resolution\npython scripts/selftest_attention.py             # 4 regression suites, all should pass\npython scripts/selftest_moe_ffn.py\n```\n\nFull pipeline: [ARCHITECTURE.md](docs/ARCHITECTURE.md).\n\n### Acknowledgements\n\nBuilt on **HSH-64** by the same author —\n[github.com/Sauomore/Cabinet_hsh64](https://github.com/Sauomore/Cabinet_hsh64).\nThe structured bit layout (`feat4 + sim52 + abs8`), the Deep Hash projection head, the\nrecall-oriented greedy bit-flip algorithm and the codec semantics are from that work; this\nrepository extends the code from a *read-only retrieval key* to a *writable per-token\nparameter carrier*.\n\nThe greedy bit-flipping optimisation is closely related to\n[Greedy Hash (NeurIPS 2018)](https://proceedings.neurips.cc/paper_files/paper/2018/file/13f3cf8c531952d72e5847c4183e6910-Paper.pdf).\n\n### License\n\nMIT — see [LICENSE](LICENSE).\n"
+  },
+  {
+    "name": "hakimi-codex",
+    "description": "Hakimi Codex - 现代化 AI 代码助手 CLI 工具",
+    "url": "https://github.com/Sauomore/hakimi-codex",
+    "homepage": "",
+    "language": "Python",
+    "languages": {
+      "Python": 358457,
+      "Batchfile": 1419,
+      "Shell": 1390
+    },
+    "stars": 3,
+    "forks": 1,
+    "watchers": 3,
+    "open_issues": 0,
+    "created": "2026-07-04",
+    "updated": "2026-09-27",
+    "pushed": "2026-07-18",
+    "size_kb": 516,
+    "topics": [],
+    "license": "MIT",
+    "files": [
+      {
+        "name": ".gitignore",
+        "type": "file",
+        "size": 260
+      },
+      {
+        "name": "LICENSE",
+        "type": "file",
+        "size": 1065
+      },
+      {
+        "name": "README.md",
+        "type": "file",
+        "size": 5311
+      },
+      {
+        "name": "codex",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "hakimi.bat",
+        "type": "file",
+        "size": 142
+      },
+      {
+        "name": "hakimi.sh",
+        "type": "file",
+        "size": 228
+      },
+      {
+        "name": "hakimi_debug.log",
+        "type": "file",
+        "size": 332
+      },
+      {
+        "name": "install.bat",
+        "type": "file",
+        "size": 1277
+      },
+      {
+        "name": "install.sh",
+        "type": "file",
+        "size": 1162
+      },
+      {
+        "name": "pyproject.toml",
+        "type": "file",
+        "size": 1138
+      },
+      {
+        "name": "random_generator.py",
+        "type": "file",
+        "size": 4651
+      },
+      {
+        "name": "requirements.txt",
+        "type": "file",
+        "size": 146
+      },
+      {
+        "name": "setup.py",
+        "type": "file",
+        "size": 1067
+      },
+      {
+        "name": "test_clipboard_encoding.py",
+        "type": "file",
+        "size": 623
+      },
+      {
+        "name": "test_clipboard_formats.py",
+        "type": "file",
+        "size": 2187
+      },
+      {
+        "name": "test_history_export_import.py",
+        "type": "file",
+        "size": 2942
+      },
+      {
+        "name": "test_main_screen_bindings.py",
+        "type": "file",
+        "size": 930
+      }
+    ],
+    "recent_commits": [
+      {
+        "sha": "bb2fca2",
+        "date": "2026-07-18",
+        "msg": "Merge branch 'main' of github.com:Sauomore/hakimi-codex"
+      },
+      {
+        "sha": "de4d4f8",
+        "date": "2026-07-18",
+        "msg": "Initial commit: project structure with README"
+      },
+      {
+        "sha": "a255efd",
+        "date": "2026-07-17",
+        "msg": "Add MIT License to the project"
+      },
+      {
+        "sha": "4fad3b0",
+        "date": "2026-07-17",
+        "msg": "feat: chat UI overhaul with copy, history, streaming and model labels"
+      },
+      {
+        "sha": "6e8f94d",
+        "date": "2026-07-14",
+        "msg": "fix: ensure confirm/cancel buttons visible in confirmation dialog"
+      }
+    ],
+    "readme": "# Hakimi Codex\n\n一个专业、高效的多智能体编程助手，采用工具调用架构，能读写文件、执行命令，并与用户协作完成复杂的软件开发任务。\n\n## 项目概述\n\nHakimi Codex 是一个 Python 项目，通过大语言模型 (LLM) 驱动的智能体，实现对项目代码的自动分析与修改。它支持严格的工具调用协议（JSON over Markdown code blocks），可执行 `read_file`、`write_file`、`list_directory`、`search_files`、`execute_command` 等操作，能够独立完成文件的创建、修改、搜索和命令运行。\n\n## 主要特性\n\n- **多工具集成**：支持读写文件、目录列表、文件搜索、命令执行等核心操作。\n- **严格的工具调用格式**：所有工具调用均通过 `` ```tool `` Markdown 块传递，确保稳定可靠。\n- **流式处理支持**：支持 LLM 流式响应，实时输出处理进度。\n- **可配置的 LLM 后端**：通过 `src/config.py` 轻松切换不同的 API 端点、模型和认证信息。\n- **输出格式化**：自动将 Agent 输出转换为清晰的终端文本或 JSON。\n- **测试友好**：包含基础测试用例，方便扩展和验证。\n\n## 项目结构\n\n```\nhakimi_codex/\n├── main.py                   # 主入口：启动 Agent 交互循环\n├── pyproject.toml            # 项目元数据与依赖管理\n├── README.md                 # 项目说明\n├── src/\n│   ├── __init__.py\n│   ├── agent.py              # 核心 Agent 类：协调工具调用与对话\n│   ├── config.py             # 配置管理：API 密钥、模型、参数\n│   ├── llm_client.py         # LLM 客户端：与模型 API 通信\n│   ├── output_formatter.py   # 输出格式化：将响应转为可读文本\n│   ├── stream_handler.py     # 流式处理：处理实时响应流\n│   └── tools.py              # 工具实现：定义可用的工具及其调用逻辑\n└── tests/\n    ├── __init__.py\n    └── test_basic.py         # 基础单元测试\n```\n\n## 安装与准备\n\n### 环境要求\n\n- Python 3.10+\n- 一个已获得 API 密钥的大语言模型服务（如 OpenAI、DeepSeek 等）\n\n### 安装步骤\n\n1. 克隆仓库：\n\n   ```bash\n   git clone git@github.com:你的用户名/hakimi_codex.git\n   cd hakimi_codex\n   ```\n\n2. （推荐）创建并激活虚拟环境：\n\n   ```bash\n   python -m venv venv\n   source venv/bin/activate      # Linux/macOS\n   venv\\Scripts\\activate         # Windows\n   ```\n\n3. 安装依赖：\n\n   ```bash\n   pip install -e .\n   ```\n\n   如果 `pyproject.toml` 中未列出具体依赖，请根据实际需要安装 `openai`、`requests` 等库。\n\n4. 配置 API 密钥：\n\n   复制 `.env.example` 为 `.env`（如果有），或直接在环境变量中设置：\n\n   ```bash\n   export API_KEY=\"你的密钥\"\n   export API_BASE_URL=\"https://api.openai.com/v1\"\n   export MODEL_NAME=\"gpt-4o-mini\"\n   ```\n\n   也可以在 `src/config.py` 中修改默认值。\n\n## 使用方法\n\n### 直接运行\n\n```bash\npython main.py\n```\n\n程序将启动交互式会话，你可以直接输入开发任务，例如：\n\n```\n用户: 创建一个 hello.py 文件，输出 \"Hello, World!\"\n```\n\nAgent 会调用 `write_file` 工具，在项目目录下生成 `hello.py`。\n\n### 编程调用\n\n你也可以在自己的脚本中导入并使用 Agent：\n\n```python\nfrom src.agent import Agent\n\nagent = Agent()\nresponse = agent.run(\"列出当前目录下的所有文件\")\nprint(response)\n```\n\n## 配置说明\n\n所有配置项均在 `src/config.py` 中定义，支持以下环境变量：\n\n| 环境变量         | 默认值                    | 说明                     |\n|------------------|---------------------------|--------------------------|\n| `API_KEY`        | (必填)                    | LLM API 密钥             |\n| `API_BASE_URL`   | `https://api.openai.com`  | API 基础地址             |\n| `MODEL_NAME`     | `gpt-4o-mini`             | 使用的模型名称           |\n| `MAX_TOKENS`     | `4096`                    | 最大生成令牌数           |\n| `TEMPERATURE`    | `0.0`                     | 生成温度                 |\n\n## 工具说明\n\nAgent 目前支持以下工具（定义在 `src/tools.py`）：\n\n- `read_file(file_path)` – 读取指定文件内容。\n- `write_file(file_path, content)` – 写入内容到文件（会覆盖已有文件）。\n- `list_directory(dir_path)` – 列出目录中的文件和子目录。\n- `search_files(pattern)` – 在当前项目中搜索匹配模式的文件。\n- `execute_command(command)` – 在终端中执行命令。\n\n> 注意：`execute_command` 操作会直接在你的系统上运行命令，请确保在安全可控的环境中使用。\n\n## 运行测试\n\n```bash\npytest tests/\n```\n\n## 贡献\n\n欢迎提交 Issue 或 Pull Request！请遵循以下原则：\n\n1. Fork 本仓库。\n2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)。\n3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)。\n4. 推送到分支 (`git push origin feature/AmazingFeature`)。\n5. 打开一个 Pull Request。\n\n## 许可证\n\n本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。\n\n## 致谢\n\n- [OpenAI](https://openai.com) 提供强大的语言模型 API。\n- 所有贡献者和使用者。\n"
+  },
+  {
+    "name": "Cabinet_hsh64",
+    "description": "",
+    "url": "https://github.com/Sauomore/Cabinet_hsh64",
+    "homepage": "",
+    "language": "TeX",
+    "languages": {
+      "TeX": 151914,
+      "Python": 107200,
+      "Rust": 69525
+    },
+    "stars": 2,
+    "forks": 0,
+    "watchers": 2,
+    "open_issues": 0,
+    "created": "2026-07-21",
+    "updated": "2026-09-04",
+    "pushed": "2026-07-31",
+    "size_kb": 2973,
+    "topics": [],
+    "license": "MIT",
+    "files": [
+      {
+        "name": ".gitignore",
+        "type": "file",
+        "size": 741
+      },
+      {
+        "name": "Cargo.toml",
+        "type": "file",
+        "size": 461
+      },
+      {
+        "name": "LICENSE",
+        "type": "file",
+        "size": 1065
+      },
+      {
+        "name": "README.md",
+        "type": "file",
+        "size": 19500
+      },
+      {
+        "name": "docs",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "examples",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "paper",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "pptx_assets",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "scripts",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "src",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "tests",
+        "type": "dir",
+        "size": 0
+      }
+    ],
+    "recent_commits": [
+      {
+        "sha": "3185434",
+        "date": "2026-07-31",
+        "msg": "docs: add Zenodo DOI badge and v1 release tag"
+      },
+      {
+        "sha": "25106e4",
+        "date": "2026-07-31",
+        "msg": "docs: integrate paper/docs and update README with release assets"
+      },
+      {
+        "sha": "f74a1ba",
+        "date": "2026-07-24",
+        "msg": "docs: update README with detailed usage, API, benchmarks and architecture"
+      },
+      {
+        "sha": "16fdb90",
+        "date": "2026-07-23",
+        "msg": "Update HSH-64 implementation: deep hash, MIH, ensemble, benchmarks"
+      },
+      {
+        "sha": "0afa8d7",
+        "date": "2026-07-23",
+        "msg": "feat: dual embedding reranking for HSH-64"
+      }
+    ],
+    "readme": "# HSH-64\n\n[![DOI](https://zenodo.org/badge/1307857867.svg)](https://doi.org/10.5281/zenodo.21721838)\n[![GitHub release](https://img.shields.io/github/v/release/Sauomore/Cabinet_hsh64?include_prereleases&style=flat-square)](https://github.com/Sauomore/Cabinet_hsh64/releases)\n\n> **当前版本**：[`v1`](https://github.com/Sauomore/Cabinet_hsh64/releases/tag/v1)\n\nHSH-64 是面向轻量化中文词表级语义检索的 64 位可学习语义哈希方案。它在保持单 `u64` 存储、单次 `popcnt` 比较的硬件友好特性的同时，将语义码从 HSH-32 的 20 位扩展到 52 位，显著提升了离散空间的语义表达能力。\n\n> **论文摘要**：语义哈希将高维连续嵌入映射为紧凑二进制码，以极小内存占用实现次线性近似最近邻（ANN）检索。HSH-64 采用 `feat(4) + sim(52) + abs(8)` 结构化编码，其中 52 位语义相似码通过三阶段流程端到端学习：连续预训练 → STE 离散精调 → 召回导向贪心后处理。在线检索集成自适应 MIH 粗排、非对称距离评分与可选的 bge-large 精排。在 3,109 词中文词表上，最佳单模型（h512，1.17 MB）纯 Hamming 空间 Recall@10 达 **0.7404**，轻量化模型（h256，585 KB）达 **0.7382**，四模型集成达 **0.7724**，完整两阶段系统达 **0.8970**。\n\n---\n\n## 项目定位与核心特性\n\n- **结构化 64 位编码**：`feat(4) + sim(52) + abs(8)`，单个 `u64` 存储，硬件 popcount 比较。\n- **三阶段端到端训练**：连续预训练 → STE 离散精调 → 召回导向贪心后处理。\n- **两阶段检索架构**：轻量编码器（bge-small + 小 MLP）粗排，可选 bge-large 精排。\n- **自适应多索引哈希（MIH）**：支持动态半径扩展，兼顾召回率与候选池大小。\n- **非对称距离评分**：查询端保留连续投影幅度，缓解符号量化信息损失。\n- **多模型 Ensemble**：不同种子/容量的 Deep Hash 模型候选融合，进一步提升召回。\n- **纯 CPU 运行**：训练与推理均无需 GPU，适合边缘设备部署。\n\n---\n\n## 编码结构\n\n```text\n[ feat: 4 bit ] + [ sim: 52 bit ] + [ abs: 8 bit ] = 64 bit\n```\n\n| 字段 | 位数 | 说明 |\n|------|------|------|\n| feat | 4 bit | 词性/语义类别标识，最多 16 类，可作硬过滤条件 |\n| sim  | 52 bit | 语义相似码，主导检索质量；理论容量 2^52 ≈ 4.5×10^15 |\n| abs  | 8 bit  | 簇内完美哈希标识，用于区分同 (feat, sim) 桶内的词 |\n\n两个码的相似度通过一次 64 位异或 + popcount 计算：\n\n```rust\nlet dist = (a ^ b).count_ones();\n```\n\n---\n\n## 架构图\n\n```text\n┌─────────────────────────────────────────────────────────────┐\n│                        离线训练阶段                          │\n│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐  │\n│  │ bge-small   │    │ bge-large   │    │  Deep Hash MLP  │  │\n│  │ 512-dim     │───→│ 1024-dim    │───→│  dim→H→52 bits  │  │\n│  │ 学生嵌入    │    │ 教师嵌入    │    │  STE + 多目标   │  │\n│  └─────────────┘    └─────────────┘    └─────────────────┘  │\n│           │                  │                  │           │\n│           ▼                  ▼                  ▼           │\n│    embedding.cache    reranker.cache    deep_hash_v3.bin    │\n│                                                              │\n│  ┌───────────────────────────────────────────────────────┐  │\n│  │ 召回导向贪心后处理 → sim_override.bin                  │  │\n│  └───────────────────────────────────────────────────────┘  │\n└─────────────────────────────────────────────────────────────┘\n                              │\n                              ▼\n┌─────────────────────────────────────────────────────────────┐\n│                        在线推理阶段                          │\n│  ┌──────────────┐    ┌──────────────┐    ┌───────────────┐  │\n│  │ 查询词       │───→│ bge-small    │───→│ HSH-64 Encoder│  │\n│  └──────────────┘    │ + MLP        │    │ (PCA/DeepHash)│  │\n│                      └──────────────┘    └───────┬───────┘  │\n│                                                  │           │\n│                      ┌───────────────────────────┘           │\n│                      ▼                                      │\n│              ┌───────────────┐    ┌──────────────────┐      │\n│              │ MIH 粗排      │───→│ bge-large 精排   │      │\n│              │ 自适应半径    │    │ (可选)           │      │\n│              └───────────────┘    └──────────────────┘      │\n└─────────────────────────────────────────────────────────────┘\n```\n\n---\n\n## 预训练模型与 Release 资源\n\n为便于复现与直接使用，本项目在 [GitHub Releases](https://github.com/Sauomore/Cabinet_hsh64/releases) 提供已训练好的模型与缓存，无需从头训练即可运行评测。\n\n### 推荐资源包\n\n| 资源包 | 大小 | 内容 | 适用场景 |\n|---|---|---|---|\n| `hsh64_pretrained_3109_light.zip` | ~18 MB | 词表 3109 + bge-small 缓存 + bge-large 缓存 + PCA-52 + Deep Hash h256 s2025 + sim_override | 轻量化部署，585 KB 模型 |\n| `hsh64_pretrained_3109_best.zip` | ~18 MB | 词表 3109 + bge-small 缓存 + bge-large 缓存 + Deep Hash h512 s42 + sim_override（最佳单模型） | 最佳纯 Hamming 召回 |\n| `hsh64_pretrained_3109_full.zip` | ~22 MB | 词表 3109 + bge-small/bge-large 缓存 + PCA + 多个 Deep Hash 模型 + 多组后处理 | 完整复现/Ensemble |\n\n### 资源包内关键文件\n\n```text\nhsh64_pretrained_3109_light/\n├── vocab_3109.txt                              # 3109 词中文词表\n├── embedding_3109.cache                        # bge-small 学生嵌入缓存\n├── reranker_3109_large.cache                   # bge-large 教师/精排嵌入缓存\n├── pca_52.bin                                  # PCA-52 投影\n├── deep_hash_v3_64_3109_h256_s2025.bin         # Deep Hash v3 模型（585 KB）\n└── sim_override_3109_h256_s2025_recall_mi100.bin  # 召回导向后处理覆盖码\n```\n\n下载并解压到 `tests/data/` 后即可直接运行下方示例命令。\n\n> **注意**：Git 仓库本身不包含 `.bin`/`.cache` 等大型二进制文件（见 [.gitignore](.gitignore)），请通过 Release 页面下载。\n\n---\n\n## 项目结构\n\n```text\nhsh64/\n├── Cargo.toml              # Rust crate 配置\n├── LICENSE                 # MIT OR Apache-2.0\n├── README.md               # 本文件\n├── src/                    # Rust 核心库\n│   ├── lib.rs              # 模块导出\n│   ├── hsh64.rs            # HSHCode64 / Hamming 距离\n│   ├── encoder.rs          # Encoder / EncoderConfig\n│   ├── deep_hash.rs        # DeepHashEncoder64 / DeepHashProjection\n│   ├── pca.rs              # PcaProjection\n│   ├── mih_index.rs        # MihSemanticIndex 自适应搜索\n│   ├── embedding.rs        # Embedding trait / FileCachedEmbedding\n│   ├── perfect_hash.rs     # 簇内完美哈希\n│   ├── pos_map.rs          # 词性映射\n│   └── error.rs            # 错误类型\n├── examples/               # Rust 可运行示例\n│   ├── benchmark_pure_hsh64.rs\n│   └── benchmark_ensemble_hsh64.rs\n├── scripts/                # Python 训练与评测脚本\n│   ├── generate_embeddings.py\n│   ├── generate_reranker_embeddings_64.py\n│   ├── train_pca_64.py\n│   ├── train_deep_hash_v3_64.py\n│   ├── post_optimize_codes_64.py\n│   ├── post_optimize_codes_recall_64.py\n│   ├── benchmark_pure_hsh64.py\n│   ├── ensemble_eval.py\n│   └── ...\n├── tests/                  # Rust 集成测试与数据\n│   ├── end_to_end.rs\n│   └── data/\n├── docs/                   # 设计文档与实验报告\n│   ├── explained.md        # HSH-64 通俗设计文档\n│   ├── explained.pdf       # 设计文档 PDF\n│   ├── experiment_data_export.md  # 实验数据汇总\n│   └── hsh64_principle.html\n└── paper/                  # 论文源码与 PDF\n    ├── main.tex            # 英文论文 LaTeX 源码\n    ├── main.pdf            # 英文论文 PDF\n    ├── main_chinese.tex    # 中文论文 LaTeX 源码\n    ├── main_chinese.pdf    # 中文论文 PDF\n    └── references.bib      # 参考文献\n```\n\n---\n\n## 快速开始\n\n### 环境要求\n\n- Rust >= 1.75\n- Python >= 3.9（训练脚本使用 PyTorch）\n- `sentence-transformers`、`numpy`、`torch`、`scikit-learn`\n\n### Rust 编译与测试\n\n```bash\ncd hsh64\ncargo test --release\ncargo run --example benchmark_pure_hsh64 -- --help\n```\n\n### Python 训练依赖安装\n\n```bash\npython -m pip install sentence-transformers numpy torch scikit-learn\n```\n\n---\n\n## 完整使用流程\n\n### 方式一：使用 Release 预训练资源（推荐）\n\n1. 从 [Releases](https://github.com/Sauomore/Cabinet_hsh64/releases) 下载 `hsh64_pretrained_3109_light.zip`。\n2. 解压到 `tests/data/`。\n3. 直接运行评测：\n\n```bash\n# 纯 HSH-64 暴力扫描\ncargo run --release --example benchmark_pure_hsh64 -- \\\n    --embedding tests/data/embedding_3109.cache \\\n    --deep-hash tests/data/deep_hash_v3_64_3109_h256_s2025.bin \\\n    --sim-override tests/data/sim_override_3109_h256_s2025_recall_mi100.bin \\\n    --top-k 10 --queries 3109\n\n# MIH 自适应搜索 + bge-large 精排\ncargo run --release --example benchmark_pure_hsh64 -- \\\n    --embedding tests/data/embedding_3109.cache \\\n    --reranker tests/data/reranker_3109_large.cache \\\n    --deep-hash tests/data/deep_hash_v3_64_3109_h256_s2025.bin \\\n    --sim-override tests/data/sim_override_3109_h256_s2025_recall_mi100.bin \\\n    --top-k 10 --queries 3109 --adaptive --coarse-factor 10 --segment-counts 13\n```\n\n### 方式二：从头训练\n\n#### 1. 准备词表\n\n词表文件每行一个词：\n\n```text\n北京\n上海\n苹果\n香蕉\n...\n```\n\n#### 2. 生成 bge-small 学生嵌入缓存\n\n```bash\npython scripts/generate_embeddings.py \\\n    --vocab tests/data/vocab_3109.txt \\\n    -o tests/data/embedding.cache\n```\n\n#### 3. 生成 bge-large 教师/精排嵌入缓存\n\n```bash\npython scripts/generate_reranker_embeddings_64.py \\\n    --vocab tests/data/vocab_3109.txt \\\n    -o tests/data/reranker_embedding.cache\n```\n\n#### 4. 训练 PCA-52 基线\n\n```bash\npython scripts/train_pca_64.py \\\n    --embedding tests/data/embedding.cache \\\n    --output tests/data/pca_52.bin\n```\n\n#### 5. 训练 Deep Hash v3 模型\n\n```bash\npython scripts/train_deep_hash_v3_64.py \\\n    --student tests/data/embedding.cache \\\n    --teacher tests/data/reranker_embedding.cache \\\n    --hidden-dim 256 \\\n    --seed 2025 \\\n    -o tests/data/deep_hash_v3_64_3109_h256_s2025.bin\n```\n\n#### 6. 召回导向后处理优化\n\n```bash\npython scripts/post_optimize_codes_recall_64.py \\\n    --embedding tests/data/embedding.cache \\\n    --reranker tests/data/reranker_embedding.cache \\\n    --deep-hash tests/data/deep_hash_v3_64_3109_h256_s2025.bin \\\n    --pos-k 10 \\\n    --neg-weight 1.0 \\\n    --max-iters 10 \\\n    -o tests/data/sim_override_3109_h256_s2025_recall_mi100.bin\n```\n\n#### 7. 纯 HSH-64 暴力扫描评测\n\n```bash\ncargo run --release --example benchmark_pure_hsh64 -- \\\n    --embedding tests/data/embedding.cache \\\n    --pca tests/data/pca_52.bin \\\n    --deep-hash tests/data/deep_hash_v3_64_3109_h256_s2025.bin \\\n    --sim-override tests/data/sim_override_3109_h256_s2025_recall_mi100.bin \\\n    --top-k 10 --queries 3109\n```\n\n#### 8. MIH 自适应搜索 + 精排评测\n\n```bash\ncargo run --release --example benchmark_pure_hsh64 -- \\\n    --embedding tests/data/embedding.cache \\\n    --reranker tests/data/reranker_embedding.cache \\\n    --deep-hash tests/data/deep_hash_v3_64_3109_h256_s2025.bin \\\n    --sim-override tests/data/sim_override_3109_h256_s2025_recall_mi100.bin \\\n    --top-k 10 --queries 3109 --adaptive --coarse-factor 10 \\\n    --segment-counts 13 --radii 0,2,4,6,8,10,12,14,16,18,20,22\n```\n\n#### 9. Ensemble 多模型评测\n\n```bash\ncargo run --release --example benchmark_ensemble_hsh64 -- \\\n    --embedding tests/data/embedding.cache \\\n    --reranker tests/data/reranker_embedding.cache \\\n    --top-k 10 --queries 3109 --radius 22 \\\n    --model tests/data/deep_hash_v3_64_3109_h256_s2025.bin \\\n    --override tests/data/sim_override_3109_h256_s2025_recall_mi100.bin \\\n    --model tests/data/deep_hash_v3_64_3109_h512_s42.bin \\\n    --override tests/data/sim_override_3109_h512_s42_recall.bin\n```\n\n---\n\n## API 说明\n\n### Rust API\n\n#### HSHCode64\n\n```rust\nuse hsh64::{HSHCode64, hamming_distance64};\n\nlet code = HSHCode64::new(feat, sim, abs);\nlet dist = hamming_distance64(a.sim(), b.sim());\n```\n\n#### Encoder\n\n```rust\nuse hsh64::{Encoder, EncoderConfig};\n\nlet config = EncoderConfig {\n    embed_dim: 512,\n    embedding_cache_path: Some(\"tests/data/embedding_3109.cache\".into()),\n    pca_path: Some(\"tests/data/pca_52.bin\".into()),\n    deep_hash_path: Some(\"tests/data/deep_hash_v3_64_3109_h256_s2025.bin\".into()),\n    sim_override_path: Some(\"tests/data/sim_override_3109_h256_s2025_recall_mi100.bin\".into()),\n    ..Default::default()\n};\nlet encoder = Encoder::with_config(config)?;\nlet code = encoder.encode_word_with_pos(\"北京\", \"n\");\n```\n\n#### MihSemanticIndex\n\n```rust\nuse hsh64::MihSemanticIndex;\n\nlet index = MihSemanticIndex::build_with_embedding(\n    encoder,\n    embedding,\n    13,      // segment_count\n    false,   // verbose\n)?;\n\n// 自适应 Hamming 搜索\nlet (radius, results) = index.search_adaptive(query_word, top_k, coarse_factor, max_radius)?;\n\n// 自适应非对称距离搜索\nlet (radius, results) = index.search_adaptive_asymmetric(query_word, top_k, coarse_factor, max_radius)?;\n```\n\n#### DeepHashEncoder64 / PcaProjection\n\n```rust\nuse hsh64::{DeepHashEncoder64, DeepHashProjection, PcaProjection};\n\nlet dh = DeepHashEncoder64::from_file(\"deep_hash_v3_64_3109_h256_s2025.bin\")?;\nlet pca = PcaProjection::from_file(\"pca_52.bin\")?;\n```\n\n### Python 脚本说明\n\n| 脚本 | 作用 |\n|------|------|\n| `generate_embeddings.py` | 用 bge-small 生成 embedding 缓存 |\n| `generate_reranker_embeddings_64.py` | 用 bge-large 生成精排/教师缓存 |\n| `train_pca_64.py` | 训练 PCA-52 投影并导出二进制 |\n| `train_deep_hash_v3_64.py` | 训练 Deep Hash MLP v3 |\n| `post_optimize_codes_64.py` | 基础贪心比特翻转后处理 |\n| `post_optimize_codes_recall_64.py` | 召回导向贪心后处理 |\n| `benchmark_pure_hsh64.py` | Python 端纯 HSH 基准 |\n| `ensemble_eval.py` | Ensemble 策略评测 |\n\n---\n\n## Benchmark 结果\n\n在 3109 词中文词表基准上，真实 top-K 由 bge-large 余弦相似度定义。\n\n| 方案 | Recall@1 | Recall@5 | Recall@10 | Recall@20 | 备注 |\n|------|----------|----------|-----------|-----------|------|\n| PCA-52 | 0.45 | 0.62 | 0.68 | 0.74 | 线性基线 |\n| Deep Hash v3 (h256) | 0.51 | 0.66 | 0.72 | 0.78 | 单模型，585 KB |\n| Deep Hash v3 + Post | 0.53 | 0.68 | 0.74 | 0.80 | 召回导向后处理 |\n| Ensemble (4 models) | 0.55 | 0.71 | 0.77 | 0.83 | 候选融合 |\n| MIH 粗排 + bge-large 精排 | 0.78 | 0.86 | 0.90 | 0.93 | 两阶段系统 |\n\n> 注：以上为论文中的代表性结果，具体数值可能随随机种子、后处理超参略有波动。\n\n### 详细实验结果\n\n更完整的模型容量分析、后处理网格搜索、集成策略与效率基准见 [docs/experiment_data_export.md](docs/experiment_data_export.md)。其中关键发现：\n\n- **最佳单模型**：`deep_hash_v3_64_3109_h512_s42.bin` + `sim_override_3109_h512_s42_recall.bin`，Recall@10 = **0.7404**\n- **轻量化单模型**：`deep_hash_v3_64_3109_h256_s42.bin` + `sim_override_3109_h256_s42_recall.bin`，Recall@10 = **0.7382**\n- **四模型集成**：纯 Hamming 空间 Recall@10 = **0.7724**\n- **两阶段系统**：MIH 粗排 + bge-large 精排，四模型集成 Recall@10 = **0.8970**\n\n### 关键指标\n\n- **在线编码器大小**：585 KB（h256）/ 1.17 MB（h512）\n- **单次 Hamming 比较**：1 条 x86 `popcnt`\n- **MIH 平均候选池**：数十到数百个\n- **MIH 平均查询半径**：约 20（自适应停止）\n\n---\n\n## 开发/测试命令\n\n```bash\n# 运行单元测试与集成测试\ncargo test --release\n\n# 纯 HSH-64 暴力扫描（PCA）\ncargo run --release --example benchmark_pure_hsh64 -- \\\n    --embedding tests/data/embedding_3109.cache \\\n    --pca tests/data/pca_52.bin \\\n    --top-k 10 --queries 3109\n\n# 纯 HSH-64 暴力扫描（Deep Hash）\ncargo run --release --example benchmark_pure_hsh64 -- \\\n    --embedding tests/data/embedding_3109.cache \\\n    --deep-hash tests/data/deep_hash_v3_64_3109_h256_s2025.bin \\\n    --top-k 10 --queries 3109\n\n# MIH 自适应搜索\ncargo run --release --example benchmark_pure_hsh64 -- \\\n    --embedding tests/data/embedding_3109.cache \\\n    --deep-hash tests/data/deep_hash_v3_64_3109_h256_s2025.bin \\\n    --top-k 10 --queries 3109 --adaptive\n\n# Ensemble 评测\ncargo run --release --example benchmark_ensemble_hsh64 -- \\\n    --embedding tests/data/embedding_3109.cache \\\n    --reranker tests/data/reranker_3109_large.cache \\\n    --top-k 10 --queries 3109 --radius 22 \\\n    --model tests/data/deep_hash_v3_64_3109_h256_s2025.bin \\\n    --override tests/data/sim_override_3109_h256_s2025_recall_mi100.bin\n```\n\n---\n\n## 论文与设计文档\n\n- [docs/explained.md](docs/explained.md)：通俗版 HSH-64 设计文档，涵盖编码结构、三阶段训练、MIH 与非对称距离。\n- [docs/experiment_data_export.md](docs/experiment_data_export.md)：完整实验数据汇总，包含所有模型文件清单与网格搜索结果。\n- [paper/main.tex](paper/main.tex)：英文论文 LaTeX 源码\n- [paper/main.pdf](paper/main.pdf)：英文论文 PDF\n- [paper/main_chinese.tex](paper/main_chinese.tex)：中文论文 LaTeX 源码\n- [paper/main_chinese.pdf](paper/main_chinese.pdf)：中文论文 PDF\n- [paper/references.bib](paper/references.bib)：参考文献\n\n---\n\n## License\n\nMIT OR Apache-2.0\n"
+  },
+  {
+    "name": "Cabinet",
+    "description": "Cabinet: Hierarchical Semantic Hashing (HSH) memory retrieval system for AI agents.  20-bit discrete encoding replaces 768-dim dense vectors. CPU-only, incremental, explainable.",
+    "url": "https://github.com/Sauomore/Cabinet",
+    "homepage": "",
+    "language": "Rust",
+    "languages": {
+      "Rust": 221298,
+      "Python": 177073,
+      "Batchfile": 1621,
+      "PowerShell": 1562,
+      "Makefile": 1281,
+      "Dockerfile": 1093,
+      "Shell": 875
+    },
+    "stars": 1,
+    "forks": 0,
+    "watchers": 1,
+    "open_issues": 0,
+    "created": "2026-06-26",
+    "updated": "2026-07-15",
+    "pushed": "2026-07-15",
+    "size_kb": 261,
+    "topics": [],
+    "license": "NOASSERTION",
+    "files": [
+      {
+        "name": ".github",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "LICENSE",
+        "type": "file",
+        "size": 254
+      },
+      {
+        "name": "LICENSE-APACHE",
+        "type": "file",
+        "size": 10763
+      },
+      {
+        "name": "LICENSE-MIT",
+        "type": "file",
+        "size": 1077
+      },
+      {
+        "name": "README.md",
+        "type": "file",
+        "size": 17160
+      },
+      {
+        "name": "RENAME.md",
+        "type": "file",
+        "size": 11312
+      },
+      {
+        "name": "cabinet-gui",
+        "type": "dir",
+        "size": 0
+      },
+      {
+        "name": "cabinet",
+        "type": "dir",
+        "size": 0
+      }
+    ],
+    "recent_commits": [
+      {
+        "sha": "d8676f9",
+        "date": "2026-07-15",
+        "msg": "feat(hsh): implement HSH-32 full pipeline with two-tier semantic retrieval"
+      },
+      {
+        "sha": "dd48321",
+        "date": "2026-07-02",
+        "msg": "feat(hsh32): implement HSH-32 encoding per paper 346(1)"
+      },
+      {
+        "sha": "d7ab760",
+        "date": "2026-07-03",
+        "msg": "chore: revert PyPI name to cabinet-hsh (import stays cabinet)"
+      },
+      {
+        "sha": "b23e6fb",
+        "date": "2026-07-03",
+        "msg": "chore: bump version to 0.1.4"
+      },
+      {
+        "sha": "0dd4cea",
+        "date": "2026-07-03",
+        "msg": "fix(ci): add diagnostics to test job and robust wheel install"
+      }
+    ],
+    "readme": "# Cabinet 🗄️\n\n> 面向 AI Agent 的**离散语义记忆检索系统**  \n> 用 20-bit / 32-bit 结构化整数替代 768 维浮点向量，让 AI 在纯 CPU 上记住、想起并解释\"为什么想起这个\"。\n\n[![Rust](https://img.shields.io/badge/rust-1.72%2B-orange)](https://www.rust-lang.org)\n[![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org)\n[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green)](LICENSE)\n\n\n---\n\n## 为什么需要 Cabinet？\n\n现有的 RAG 系统（FAISS / Milvus / Chroma）虽然强大，但在 Agent 场景中暴露了三个结构性缺陷：\n\n| 缺陷 | 问题 | Cabinet 的解决 |\n|------|------|---------------|\n| **不可解释** | 向量相似度是黑箱，无法审计为什么选中某段文本 | 检索路径完全可审计：类别→簇→词，四级匹配 |\n| **更新成本高** | 新增文档需要重建 IVF 聚类或整个索引 | 仅追加写入 + 后台 LSM 合并，增量更新 |\n| **硬件依赖** | 需要 GPU 或大内存才能接受延迟 | 纯 CPU，索引体积缩小 ~1000 倍，笔记本即可运行 |\n\n> **一句话**：如果你需要在普通电脑上、以极低成本、让 AI 记住大量知识并解释\"为什么想起这个\"——用 Cabinet。\n\n---\n\n## 核心概念：HSH（层次语义哈希）\n\nCabinet 的核心创新是 **Hierarchical Semantic Hashing (HSH)**，提供两种精度模式：\n\n### 1. HSH-20（基础版，20-bit）\n\n每个词被编码为一个 **20-bit 结构化整数**：\n\n```\n┌───┬────────┬────────┐\n│feat│  sim   │  abs   │\n│4-bit│ 8-bit │ 8-bit │\n└───┴────────┴────────┘\n  ↓     ↓        ↓\n类别   语义簇    簇内唯一\n\n例：0x0_15_01 = 名词(0x0) + 簇#21(0x15) + 桶内词#1(0x01)\n```\n\n- **feat (4-bit)**：词性类别（名词/动词/形容词...共16类）\n- **sim (8-bit)**：K-means 语义簇 ID（256簇）\n- **abs (8-bit)**：簇内准完美哈希（256桶）\n\n**检索退化为 B-tree 前缀匹配**——一次 O(log n) 的整数比较，无需 GPU。\n\n### 2. HSH-32（扩展版，32-bit，含反义词检测）\n\n基于论文 *HSH-32: Hierarchical Semantic Hashing with 32-bit Continuous Direction Encoding*，每个词被编码为一个 **32-bit 结构化整数**：\n\n```\n┌───┬────────────┬────────┐\n│feat│     sim     │  abs   │\n│4-bit│  20-bit   │ 8-bit │\n└───┴────────────┴────────┘\n  ↓         ↓          ↓\n类别    语义方向码    簇内唯一\n\n例：0xA_42_123_F0 = 形容词(0xA) + 方向码0x42123(20-bit) + 桶内词#0xF0\n```\n\n- **feat (4-bit)**：词性类别（同 HSH-20）\n- **sim (20-bit)**：PCA 降维 + Sign 量化后的语义方向码（约 100 万方向）\n- **abs (8-bit)**：簇内准完美哈希（同 HSH-20）\n\n**HSH-32 的额外能力**：\n- ✅ **反义词检测**：通过语义方向码的按位取反关系检测反义词（如\"好\"vs\"坏\"），评分自动乘以 -0.5\n- ✅ **方向评分**：20-bit 方向码提供约 100 万唯一方向，语义区分度远高于 8-bit（256 簇）\n- ✅ **连续方向编码**：PCA 投影 + Sign 量化将 768-dim BERT 向量压缩为 20-bit 方向码，保留约 70%~85% 方差\n- ✅ **编码空间**：16 × 2^20 × 256 ≈ 43 亿唯一编码，支持大规模词典\n\n---\n\n## 快速开始\n\n### 安装\n\n```bash\n# Python 用户（推荐）\npip install pycabinet\n\n# 含可视化 GUI\npip install pycabinet[gui]\n\n# Rust 开发者\ncargo install cabinet-cli\n\n# Docker 用户\ndocker-compose up -d\n```\n\n### Python 使用（HSH-20）\n\n```python\nimport pycabinet\n\n# 初始化记忆库（~4MB 内存 + SQLite 单文件）\nmem = pycabinet.Memory(\n    path=\"./agent_memory.db\",\n    precision=\"light\",    # light | hybrid | precise\n    pos_threshold=50,      # 常用词晋升阈值\n    max_context=4096,      # 工作记忆窗口\n)\n\n# 插入记忆（自动分词、编码、入库）\nmem.insert(\"用户明天下午3点开会，准备PPT。\")\nmem.insert(\"用户喜欢听管弦乐。\")\nmem.insert(\"5号楼邻居有梯子，平时放在车库。\")\n\n# 检索记忆（四级匹配：精确→同簇→同类→关联）\nresults = mem.query(\"会议准备\", top_k=5)\nfor r in results:\n    level = [\"关联\", \"同类\", \"同簇\", \"精确\"][r.match_level - 1]\n    print(f\"[{level}] score={r.score:.3f} doc_id={r.doc_id}\")\n    if r.match_level >= 3:  # 只解码高置信度\n        text = mem.decode(r)\n        print(f\"  → {text}\")\n\n# 快照与迁移\nmem.snapshot(\"./backup/2026-06-25.db\")\nmem.close()\n```\n\n### Python 使用（HSH-32，含反义词检测）\n\n```python\nfrom pycabinet import Encoder, hsh32_is_antonym, hsh32_compute_score\n\n# 1. HSH-32 编码可视化\nenc = Encoder()\ncodes = enc.encode_hsh32(\"用户喜欢听管弦乐，不喜欢噪音。\")\nfor c in codes:\n    print(f\"HSH-32: feat=0x{c.feat:01X}, sim=0x{c.sim:05X}, abs=0x{c.abs:02X}\")\n\n# 2. 反义词检测\nsim_a = codes[0].sim   # \"喜欢\" 的方向码\nsim_b = codes[3].sim   # \"不喜欢\" 的方向码\nif hsh32_is_antonym(sim_a, sim_b):\n    print(\"检测到反义词！检索时评分将乘以 -0.5\")\n\n# 3. 综合评分计算（方向 + 位置 + 频率）\nscore, is_ant = hsh32_compute_score(sim_a, sim_b, 0, 0, 1.0)\nprint(f\"Score={score:.3f}, is_antonym={is_ant}\")\n```\n\n### Rust 使用（HSH-32）\n\n```rust\nuse cabinet_hsh::{Encoder32, HSHCode32, is_antonym, query_hsh32, CandidateDoc};\nuse std::collections::HashMap;\n\nfn main() {\n    // 编码\n    let encoder = Encoder32::new();\n    let code = encoder.encode_word(\"测试\", 0x01);\n    println!(\"HSH-32: feat={}, sim=0x{:05X}, abs=0x{:02X}\", \n             code.feat(), code.sim(), code.abs());\n\n    // 反义词检测\n    assert!(is_antonym(0, 0xF_FFFF, 4096));  // 精确反义\n    assert!(!is_antonym(0, 100_000, 4096));  // 非反义\n\n    // 查询（在 [sim_q - delta, sim_q + delta] 范围内扫描）\n    let mut buckets = HashMap::new();\n    // ... 填充 bucket 数据\n    let query = HSHCode32::new(0, 50_000, 0);\n    let results = query_hsh32(query, &buckets, 5, 1024, 0.7, 0.2, 0.1, 4096);\n}\n```\n\n### CLI 命令行\n\n```bash\n# 编码演示（HSH-20）\ncabinet encode \"明天下午3点开会\"\n# 输出：6 HSH codes → feat=0x0 sim=0xXX abs=0xXX\n\n# HSH-32 编码（长方向码）\ncabinet encode32 \"明天下午3点开会\"\n# 输出：6 HSH-32 codes → feat=0x0 sim=0xXXXXX abs=0xXX\n\n# 插入记忆\ncabinet insert \"准备PPT材料\"\n\n# 检索记忆\ncabinet query \"会议准备\" --top-k 5\n# 输出：\n#   1. [EXACT] score=0.950 doc_id=1\n#   2. [CLUSTER] score=0.720 doc_id=5\n\n# 批量导入（从文本文件，每行一条）\ncabinet batch ./news_corpus.txt\n\n# 查看统计\ncabinet stats\n\n# 创建快照\ncabinet snapshot ./backup.db\n```\n\n---\n\n## 三层记忆架构\n\nCabinet 模拟人类认知科学中的记忆分层：\n\n```\n┌──────────────────────────────────────────┐\n│  Layer 3: Working Memory（工作记忆）      │\n│  LRU 缓存，推理期间热点记忆，4096 tokens  │\n│  命中则直接返回，O(1)                     │\n└──────────────────┬───────────────────────┘\n                   │ 未命中 → 查询\n┌──────────────────┴───────────────────────┐\n│  Layer 2: Archive Index（档案柜索引）       │\n│  16 个 Feature Drawer（按词性分类）       │\n│  每个 Drawer 内 B-tree 按 (sim, abs) 索引  │\n│  四级匹配：精确→同簇→同类→关联            │\n│  VByte + Delta 压缩                       │\n└──────────────────┬───────────────────────┘\n                   │ 后台合并\n┌──────────────────┴───────────────────────┐\n│  Layer 1: Token Store（词元层）             │\n│  原始文档 HSH 序列，仅追加缓冲区            │\n│  满 1000 条 → LSM 合并到 Archive           │\n│  WAL 预写日志，崩溃 100% 恢复               │\n└──────────────────────────────────────────┘\n```\n\n---\n\n## 可视化界面\n\n```bash\ncd cabinet-gui\npip install -r requirements.txt\nstreamlit run app.py\n```\n\n或双击 `启动.bat`（Windows）\n\n6 个可视化页面：\n\n| 页面 | 内容 |\n|------|------|\n| 🏠 **首页** | 项目概览、核心指标、HSH 结构表 |\n| 🔢 **编码可视化** | 分词→HSH 编码→二进制拆解→空间散点图 |\n| 🗂️ **记忆架构** | 16 抽屉网格图、三层交互流程图 |\n| 🔍 **检索路径** | 查询词四级匹配流程图、文档聚合排序 |\n| 📁 **索引浏览器** | Drawer 热力图、B-tree 叶子节点分布、前缀扫描演示 |\n| ⚡ **操作控制台** | 插入/查询/WAL 日志/系统统计（交互式） |\n\n---\n\n## 项目结构\n\n```\ncabinet/\n├── crates/\n│   ├── cabinet-hsh/          # 编码层：分词、POS、HSH 20-bit/32-bit 编码、准完美哈希\n│   │   ├── src/hsh_code.rs   # HSH-20 编码结构\n│   │   ├── src/hsh32.rs      # HSH-32 编码：PCA + Sign 量化 + 反义词检测 + 查询算法\n│   │   ├── src/encoder.rs    # Encoder（支持 HSH-20 + HSH-32）\n│   │   ├── src/cluster.rs    # 聚类中心 + mock_embed\n│   │   ├── src/perfect_hash.rs  # 种子表 + 准完美哈希\n│   │   ├── src/pos_map.rs    # 词性映射表\n│   │   └── src/error.rs      # 编码错误类型\n│   ├── cabinet-index/          # 索引层：B-tree 前缀索引、LSM 合并、VByte/Delta 压缩\n│   ├── cabinet-store/          # 存储层：SQLite 后端、WAL 崩溃恢复、原子替换\n│   ├── cabinet-router/         # 路由层：RelRouter 关联权重（硬编码 + MLP 扩展）\n│   ├── cabinet-core/           # 核心编排：Memory API、三层架构、并发控制\n│   ├── cabinet-cli/            # 命令行工具：insert/query/batch/stats/encode/encode32\n│   └── cabinet-tools/          # 离线工具：聚类中心构建、种子表搜索\n├── pycabinet/                  # PyO3 Python 绑定（pip install pycabinet）\n│   ├── src/lib.rs             # Python Memory 类 + HSH-32 辅助函数\n│   ├── pyproject.toml         # PyPI 发布配置\n│   └── tests/                 # Python 集成测试\n├── cabinet-gui/                # Streamlit 可视化应用（独立目录）\n│   ├── app.py                 # 主入口\n│   ├── pages/                 # 6 个可视化页面\n│   ├── utils.py               # 中文字体配置\n│   └── 启动.bat / 启动.ps1   # 一键启动脚本\n├── examples/                   # 示例代码和数据\n│   ├── basic.rs               # Rust 示例（HSH-20）\n│   ├── basic_hsh32.rs          # Rust 示例（HSH-32）\n│   ├── basic.py               # Python 示例（HSH-20）\n│   └── basic_hsh32.py        # Python 示例（HSH-32）\n│   └── sample_corpus.txt      # 10 条社区互助语料\n├── bench/                      # 基准测试（insert/query 吞吐量）\n├── scripts/                    # 构建和测试脚本\n│   ├── build-release.bat      # Windows 构建 wheel\n│   ├── build-release.sh       # Linux/macOS 构建\n│   └── test-install.py        # 安装后功能验证\n├── .github/workflows/          # CI/CD\n│   ├── ci.yml                 # PR 自动测试\n│   └── publish.yml            # 推 tag 自动发布 PyPI wheel\n├── Cargo.toml                 # Workspace 根配置（8 个 crate）\n├── Makefile                   # make build/test/fmt/clippy\n├── Dockerfile                 # 多阶段构建\n├── docker-compose.yml         # 组合启动\n├── config.toml                # 运行时配置（路径/精度/阈值）\n├── CONTRIBUTING.md            # 贡献指南\n├── CHANGELOG.md             # 版本变更\n└── README.md                  # 本文档\n```\n\n---\n\n## HSH-32 技术细节\n\n### 编码流程\n\n```\n输入词 → jieba 分词 + POS → 获取 BERT 向量(768-dim)\n                                      ↓\n                              PCA 投影(20-dim)\n                                      ↓\n                              Sign 量化 → 20-bit sim\n                                      ↓\n                              完美哈希 → 8-bit abs\n                                      ↓\n                           HSHCode32(feat:4, sim:20, abs:8)\n```\n\n### 反义词检测原理\n\n论文定理：当两个向量方向相反（夹角 ≈ 180°）时，它们的 20-bit sim 码在二进制上呈现按位取反关系。\n\n```\n判定条件：|sim_a + sim_b - 0xFFFFF| <= tolerance\n\n例：sim_a = 0x00000 (全 0)  ← 反义 →  sim_b = 0xFFFFF (全 1)\n   sim_a = 0x80000          ← 反义 →  sim_b = 0x7FFFF\n\n默认 tolerance = 4096（约 0.4% 误差容忍）\n```\n\n检测到反义词后，检索评分自动乘以 **-0.5**，有效降低语义相反文档的排序。\n\n### 查询评分公式\n\n```\nScore(q, d) = α·DirectionScore + β·PositionScore + γ·FrequencyScore\n\n其中：\n- DirectionScore = 1 - |sim_q - sim_d| / 2^20   （方向相似度，范围 [0,1]）\n- PositionScore  = 1 - |abs_q - abs_d| / 255     （位置接近度，范围 [0,1]）\n- FrequencyScore = (1 + ln(freq)) / 2            （频率评分，范围 [0,1]）\n\n论文默认值：α = 0.7, β = 0.2, γ = 0.1\n反义词惩罚：若 is_antonym，score *= -0.5\n```\n\n### 查询算法\n\n在 `[sim_q - delta, sim_q + delta]` 范围内扫描所有候选 bucket，收集文档并按评分降序返回 `top_k`。\n\n```rust\nlet results = query_hsh32(\n    query_code,     // HSHCode32\n    &buckets,       // HashMap<bucket_id, Vec<CandidateDoc>>\n    top_k,          // 返回数量\n    delta,          // 扫描范围（默认 1024）\n    alpha, beta, gamma,  // 评分权重\n    tolerance,      // 反义词检测阈值\n);\n```\n\n---\n\n## 性能指标（目标）\n\n| 指标 | HSH-20 | HSH-32 | 对比 |\n|------|--------|--------|------|\n| 索引体积 | ~2.5 bytes/词 | ~4 bytes/词 | vs 768×4=3072 bytes/词（FAISS） |\n| 压缩比 | ~1228× | ~768× | 相比稠密向量 |\n| 单线程编码 | > 5万词/秒 | > 3万词/秒 | MVP 目标 |\n| 检索延迟 P99 | < 10ms | < 15ms | 10万文档规模 |\n| 内存占用 | ~4MB + SQLite | ~6MB + SQLite | 无需 GPU |\n| 增量写入 | 毫秒级 | 毫秒级 | 无需重建索引 |\n| 语义区分度 | 256 方向 | ~100万 方向 | HSH-32 提升 ~4096× |\n| 反义词检测 | ❌ | ✅ | HSH-32 独有 |\n\n---\n\n## 使用场景\n\n| 场景 | 为什么用 Cabinet | 为什么不用 FAISS |\n|------|---------------|-----------------|\n| **个人 AI 助手** | 笔记本本地运行，记住用户历史偏好 | GPU 不现实，向量库太大 |\n| **边缘设备** | 工业控制器/树莓派，4MB 内存足够 | 需要 GPU 或大内存 |\n| **高频增量** | 每日万级新闻流，秒级写入 | 每次重建 IVF 分钟级延迟 |\n| **可解释审计** | 法律/医疗系统必须解释为什么选中某段 | 向量相似度是黑箱 |\n| **语义反义词过滤** | 自动检测并降低\"喜欢\"vs\"讨厌\"的误匹配 | 无法区分反义方向 |\n| **课程/论文原型** | 技术亮点抓眼球，可解释性强 | 缺乏差异化创新点 |\n\n---\n\n## 开发\n\n```bash\n# 克隆仓库\ngit clone https://github.com/yourname/cabinet\ncd cabinet\n\n# 运行测试\ncargo test --workspace\nmake test\n\n# 格式化 + 检查\ncargo fmt\ncargo clippy --workspace -- -D warnings\nmake clippy\n\n# 构建 CLI\ncargo build --release -p cabinet-cli\n\n# 安装 Python 绑定（开发模式）\ncd pycabinet\nmaturin develop\npython ../scripts/test-install.py\n\n# 启动可视化\ncd ../cabinet-gui\nstreamlit run app.py\n```\n\n---\n\n## 技术路线\n\n- **MVP v0.1.0**（当前）：Light 精度、SQLite 后端、硬编码 Router、jieba 分词、**HSH-32 编码** ✅\n- **v0.2**：HSH-32 端到端集成（Memory 层支持 HSH-32 索引与查询）\n- **v0.5**：Hybrid 精度（热桶保留残差）、RelRouter MLP（ONNX）、SIMD 加速\n- **v1.0**：RocksDB 后端、自定义词典、列族映射、SST 快照、真实 BERT 向量 + 离线 PCA 训练\n\n详见 [技术路线支持文档](../技术路线支持.md)。\n\n---\n\n## 贡献\n\n欢迎 Issue 和 PR！请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。\n\n核心设计原则：\n- 编码层零 IO（纯内存计算）\n- 索引层零存储细节（抽象字节流）\n- 存储层可插拔（SQLite → RocksDB）\n- Python 层薄如纸（只做类型转换）\n\n---\n\n## License\n\nMIT OR Apache-2.0\n\n---\n\n> **Cabinet** — 让 AI 记住并解释它记住了什么。  \n> 构建中，欢迎试用和反馈！\n"
+  },
+  {
+    "name": "Lixivium",
+    "description": "",
+    "url": "https://github.com/Sauomore/Lixivium",
+    "homepage": "",
+    "language": "Python",
+    "languages": {},
+    "stars": 2,
+    "forks": 0,
+    "watchers": 2,
+    "open_issues": 0,
+    "created": "2026-05-29",
+    "updated": "2026-06-01",
+    "pushed": "2026-05-29",
+    "size_kb": 95,
+    "topics": [],
+    "license": "MIT",
+    "files": [],
+    "recent_commits": [],
+    "readme": "<p align=\"center\">\n  <img src=\"https://img.shields.io/badge/status-active-success.svg\" alt=\"Status\" />\n  <img src=\"https://img.shields.io/badge/license-MIT-blue.svg\" alt=\"License\" />\n  <img src=\"https://img.shields.io/badge/Python-3.10+-green.svg\" alt=\"Python\" />\n  <img src=\"https://img.shields.io/badge/Node.js-18+-brightgreen.svg\" alt=\"Node.js\" />\n</p>\n\n<h1 align=\"center\">Lixivium</h1>\n\n<p align=\"center\">\n  <strong>Visual Data Cleaning Tool — 可视化数据清洗工具</strong>\n</p>\n\n<p align=\"center\">\n  Drag, connect, configure → Auto-generate Pandas / SQL / PySpark code → Live preview\n</p>\n\n<p align=\"center\">\n  <a href=\"#-features\">Features</a> •\n  <a href=\"#-quick-start\">Quick Start</a> •\n  <a href=\"#-architecture\">Architecture</a> •\n  <a href=\"#-node-types\">Node Types</a> •\n  <a href=\"#-project-structure\">Structure</a>\n</p>\n\n---\n\n## ✨ Features\n\n- **🎨 Visual Workflow Builder** — React Flow-based canvas with drag-and-drop nodes\n- **🐼 Multi-Language Code Generation** — Outputs Pandas, SQL (CTE-based), and PySpark\n- **📊 Real-Time Preview** — DuckDB-powered execution engine for instant data preview\n- **📂 Drag-and-Drop CSV Import** — Drop `.csv` files directly onto the canvas, auto-parse columns\n- **🪟 Glassmorphism UI** — Frosted glass panels with smooth animations\n- **↩️ Undo/Redo** — 50-step history stack\n- **💾 Script Export** — Download generated code as `.py` or `.sql` files\n- **⚡ Monaco Editor** — VS Code-quality code editing with syntax highlighting\n\n## 🚀 Quick Start\n\n### Prerequisites\n\n- **Python 3.10+**  \n- **Node.js 18+**\n\n### Install\n\n```bash\n# Clone the repo\ngit clone https://github.com/your-username/lixivium.git\ncd lixivium\n\n# Backend dependencies\ncd backend\npip install -r requirements.txt\n\n# Frontend dependencies\ncd ../frontend\nnpm install\n```\n\n### Run\n\n```bash\n# From project root — single command\npython start.py\n```\n\nOr manually in two terminals:\n\n```bash\n# Terminal 1 — Backend\ncd backend\nuvicorn main:app --host 0.0.0.0 --port 8000\n\n# Terminal 2 — Frontend\ncd frontend\nnpm run dev\n```\n\nThen open **http://localhost:3000**\n\n### Quick Demo\n\n1. Drag **CSV Input** from the sidebar to the canvas (or drop a `.csv` file directly)\n2. Drag a **Filter** node and connect it to the CSV node\n3. Click the Filter node to configure it (e.g. `age > 30`)\n4. Drag a **Data Preview** node and connect it to the Filter\n5. Click **Run Preview** — see the filtered data in the table\n6. Switch between **Pandas / SQL / PySpark** tabs to view generated code\n\n## 🏗️ Architecture\n\n```\n┌─────────────────────────────────────────────────────┐\n│                    Frontend (React)                  │\n│  ┌─────────┐  ┌──────────┐  ┌──────┐  ┌──────────┐ │\n│  │ Sidebar │  │  Canvas  │  │ Code │  │  Data    │ │\n│  │ (nodes) │  │(React    │  │Editor│  │  Table   │ │\n│  │         │  │  Flow)   │  │Monaco│  │ AG Grid  │ │\n│  └─────────┘  └──────────┘  └──────┘  └──────────┘ │\n│                      ↕ API                          │\n├─────────────────────────────────────────────────────┤\n│                   Backend (FastAPI)                  │\n│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐ │\n│  │  IR Layer    │  │  Codegen     │  │ Executor  │ │\n│  │  (graph.py)  │→ │ pandas_gen   │→ │ DuckDB    │ │\n│  │              │  │ sql_gen      │  │           │ │\n│  │              │  │ pyspark_gen  │  │           │ │\n│  └──────────────┘  └──────────────┘  └───────────┘ │\n└─────────────────────────────────────────────────────┘\n```\n\n### Core Flow\n\n```\nUser drags \"Drop NA\" node\n        ↓\nIR Layer → DropNaNode(config: {how: \"any\"})\n        ↓\nPandas Generator → df.dropna(how=\"any\")\nSQL Generator   → WHERE col IS NOT NULL\nPySpark Generator → df.dropna(how=\"any\")\n        ↓\nFrontend Monaco Editor displays code\nDuckDB executes SQL for live preview\n```\n\n## 🧩 Node Types\n\n| Category | Node | Pandas | SQL |\n|----------|------|--------|-----|\n| 📥 Source | **CSV Input** | `pd.read_csv()` | `read_csv_auto()` |\n| | **Database Input** | `pd.read_sql()` | raw query |\n| 🔄 Transform | **Filter** | `df[df.col > 0]` | `WHERE col > 0` |\n| | **Drop NA** | `df.dropna()` | `WHERE col IS NOT NULL` |\n| | **Fill NA** | `df.fillna()` | `COALESCE(col, val)` |\n| | **Drop Duplicates** | `df.drop_duplicates()` | `SELECT DISTINCT` |\n| | **Rename Column** | `df.rename()` | `SELECT old AS new` |\n| | **Select Columns** | `df[[\"a\",\"b\"]]` | `SELECT a, b` |\n| | **Type Convert** | `df.astype()` | `CAST(col AS type)` |\n| | **Sort** | `df.sort_values()` | `ORDER BY` |\n| | **Group Agg** | `df.groupby().agg()` | `GROUP BY` |\n| | **Join** | `df.merge()` | `JOIN` |\n| | **Derive Column** | `df[\"new\"] = expr` | `SELECT *, expr AS new` |\n| 📤 Output | **CSV Output** | `df.to_csv()` | `COPY ... TO` |\n| | **Database Output** | `df.to_sql()` | `CREATE TABLE AS` |\n| | **Data Preview** | `df.head(100)` | `LIMIT 100` |\n\n## 🛠️ Tech Stack\n\n| Layer | Technology | Purpose |\n|-------|-----------|---------|\n| **Canvas** | React Flow | Node drag-and-drop, edges, minimap |\n| **Code Editor** | Monaco Editor | VS Code kernel, syntax highlighting |\n| **State** | Zustand | Lightweight store with undo/redo |\n| **UI** | Ant Design 5 | Drawers, forms, uploads, popovers |\n| **Data Grid** | AG Grid | Million-row smooth scrolling |\n| **Backend** | FastAPI | Async REST + WebSocket |\n| **Execution** | DuckDB | In-memory analytical SQL engine |\n| **Codegen** | Template Method | Per-language code generators |\n| **Styling** | CSS Glassmorphism | Frosted glass panels, animations |\n\n## 📁 Project Structure\n\n```\nlixivium/\n├── start.py                    # One-click launcher\n├── LICENSE\n├── README.md\n│\n├── shared/                     # Shared TypeScript types\n│   └── types/\n│       ├── nodes.ts            # 16 node type definitions\n│       └── workflow.ts         # Workflow & codegen types\n│\n├── backend/                    # FastAPI backend\n│   ├── main.py                 # Entry point (CORS + routes)\n│   ├── requirements.txt\n│   └── engine/\n│       ├── ir/\n│       │   └── graph.py        # IR graph (topological sort, validation)\n│       ├── codegen/\n│       │   ├── pandas_gen.py   # IR → Pandas\n│       │   ├── sql_gen.py      # IR → SQL (CTE)\n│       │   └── pyspark_gen.py  # IR → PySpark\n│       └── executor/\n│           └── duckdb_executor.py  # Live preview engine\n│\n├── frontend/                   # React frontend\n│   ├── vite.config.ts\n│   └── src/\n│       ├── App.tsx             # Main layout (glass 3-column)\n│       ├── index.css           # Glassmorphism theme + animations\n│       ├── stores/             # Zustand stores\n│       └── components/\n│           ├── Sidebar/        # Node palette\n│           ├── Canvas/         # React Flow canvas + custom nodes\n│           ├── CodeEditor/     # Monaco editor\n│           ├── DataTable/      # AG Grid preview\n│           └── History/        # Undo/redo panel\n│\n├── uploads/                    # Uploaded CSV files\n└── tests/\n```\n\n## 📄 License\n\nMIT © 2026\n"
+  },
+  {
+    "name": "MindMath_Studio",
+    "description": "",
+    "url": "https://github.com/Sauomore/MindMath_Studio",
+    "homepage": "",
+    "language": "Python",
+    "languages": {},
+    "stars": 2,
+    "forks": 0,
+    "watchers": 2,
+    "open_issues": 0,
+    "created": "2026-05-22",
+    "updated": "2026-06-01",
+    "pushed": "2026-05-24",
+    "size_kb": 179,
+    "topics": [],
+    "license": "MIT",
+    "files": [],
+    "recent_commits": [],
+    "readme": ""
+  },
+  {
+    "name": "-",
+    "description": "这是一个可以提供简易数据建模的软件，支持导入csv文件以及自定义方程",
+    "url": "https://github.com/Sauomore/-",
+    "homepage": "",
+    "language": "Python",
+    "languages": {},
+    "stars": 1,
+    "forks": 0,
+    "watchers": 1,
+    "open_issues": 0,
+    "created": "2026-02-07",
+    "updated": "2026-02-09",
+    "pushed": "2026-02-09",
+    "size_kb": 43,
+    "topics": [
+      "anaylsis",
+      "data"
+    ],
+    "license": "",
+    "files": [],
+    "recent_commits": [],
+    "readme": ""
+  }
+]

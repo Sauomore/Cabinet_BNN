@@ -184,7 +184,34 @@ def main() -> int:
           f"train {train.n/1e6:.1f} M tokens  val {val.n/1e6:.2f} M tokens")
 
     from tokenizers import Tokenizer
-    tok = Tokenizer.from_file(str(args.data_dir / "tokenizer.json"))
+    tok_path = args.data_dir / "tokenizer.json"
+    if not tok_path.exists():
+        # ⚠️ 自动补全：23_encode_corpus.py 用 --tok 指向别处的 tokenizer，
+        #    但【不会】把它复制到输出目录，导致训练时报「找不到 tokenizer.json」。
+        #    这个坑已经踩过两次（corpus_mixed 与 corpus_clean）。
+        #    这里在 data/ 下找同词表的 tokenizer 自动补上，而不是让训练崩掉。
+        candidates = sorted((ROOT / "data").glob("*/tokenizer.json"),
+                            key=lambda p: -p.stat().st_size)
+        src = None
+        for cand in candidates:
+            if cand.parent == args.data_dir:
+                continue
+            try:
+                probe = Tokenizer.from_file(str(cand))
+                if probe.get_vocab_size() == stats["vocab_size"]:
+                    src = cand
+                    break
+            except Exception:
+                continue
+        if src is None:
+            raise SystemExit(
+                f"缺少 {tok_path}，且 data/ 下找不到词表同为 "
+                f"{stats['vocab_size']} 的 tokenizer。请手动放置。")
+        import shutil
+        shutil.copy2(src, tok_path)
+        print(f"[数据] tokenizer.json 缺失，已从 {src.parent.name}/ 自动补全"
+              f"（词表 {stats['vocab_size']:,} 一致）")
+    tok = Tokenizer.from_file(str(tok_path))
 
     # ---- 模型 ----
     model = build_transformer(

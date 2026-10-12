@@ -222,8 +222,11 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> int:
     ap = argparse.ArgumentParser(description="Cabinet-BNN 对话服务")
     ap.add_argument("--ckpt", type=Path,
-                    default=ROOT / "results/lm_base_mixed/final.pt")
-    ap.add_argument("--data-dir", type=Path, default=ROOT / "data/corpus_mixed")
+                    default=ROOT / "results/lm_base_1ep/final.pt",
+                    help="默认用 lm_base_1ep —— 这是【事实探针 7/12】的可用基座。"
+                         "注意 lm_base_mixed 是失败产物（2/12），别误用。")
+    ap.add_argument("--data-dir", type=Path,
+                    default=ROOT / "data/corpus_all")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--device", default="cuda")

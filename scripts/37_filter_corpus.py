@@ -84,9 +84,12 @@ def main() -> int:
 
     with io.open(args.src, encoding="utf-8", errors="ignore") as f, \
          io.open(args.out, "w", encoding="utf-8") as w:
+        # ⚠️ 字节统计必须 encode 后再 len。直接用 len(line) 得到的是
+        #    Unicode【字符】数，中文 1 字 = 3 字节，会低估约 2.7 倍。
+        #    这个坑在本项目里已经犯过两次（22_rebuild_corpus 与这里）。
         for line in f:
             n_in += 1
-            bytes_in += len(line)
+            bytes_in += len(line.encode("utf-8"))
             body = line.rstrip("\n")
             if not body.strip():
                 continue
@@ -105,7 +108,7 @@ def main() -> int:
             else:
                 w.write(line)
                 n_out += 1
-                bytes_out += len(line)
+                bytes_out += len(line.encode("utf-8"))
 
             if n_in % 500000 == 0:
                 print(f"  {n_in:>10,} 行  保留 {n_out:>10,}  "
