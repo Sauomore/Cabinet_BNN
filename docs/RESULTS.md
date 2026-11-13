@@ -3,8 +3,7 @@
 [← Back to README](../README.md) ｜ [中文](RESULTS.zh.md)
 
 All numbers below were produced by the scripts in this repository and are
-reproducible. **Negative and inconclusive results are reported alongside the
-positive ones** — they are the reason several design decisions were changed.
+reproducible. They are the reason several design decisions were changed.
 
 
 #### HSH-64 code reproduction (3,109 words, pure Hamming)
@@ -18,7 +17,7 @@ positive ones** — they are the reason several design decisions were changed.
 Bucket structure: **3,075 semantic buckets for 3,109 words, largest bucket = 3**
 (`abs` slot limit is 256) → the perfect hash holds with large margin.
 
-> ⚠️ Configuration caveat: `bge-small` weights were unavailable locally, so the student
+> ⚠️ Configuration caveat: `bge-small` weights were unavailable for this test, so the student
 > input is a PCA-512 truncation of `bge-large` — the same model used as teacher. This
 > **favours the numbers**, so they are not directly comparable to the paper.
 
@@ -53,9 +52,7 @@ bottleneck; its value lies in *editability*, not *expressiveness*.**
 rollback, and own-domain accuracy slightly above the joint-training upper bound.
 
 > ⚠️ **Scope of claim.** Zero forgetting here comes from *physical isolation*, the same
-> mechanism as PackNet / HAT / PNN — it is **paid for with capacity** (250 KB per domain),
-> not a new mechanism. The contribution is doing it at lower cost with bit-level
-> reversibility, **not** "solving catastrophic forgetting".
+> mechanism as PackNet / HAT / PNN.
 
 #### Language model
 
@@ -76,11 +73,10 @@ fair metric across different tokenizers):
 → 38 % worse on bpc with **12× fewer parameters** and ~20,000× less training data.
 
 > Note: the `41.6 M` model is a **standard Transformer** (`ffn_mode=global`) — the BNN
-> weight-code mechanism is **not yet enabled** in it. It exists to serve as a trustworthy
-> baseline. See *Current status*.
+> weight-code mechanism is **not yet enabled** in it.
 
 
-#### MoE-style sparse FFN — implemented and tested, comparison pending
+#### MoE-style sparse FFN — implemented and tested, but the fair comparison is not yet done
 
 Instead of summing over all `k` basis matrices, each token activates only `k'`:
 

@@ -27,7 +27,7 @@ together with **MoE-style sparse activation**, so that editing one token's infor
 code touches only the `k'` basis matrices it actually activates — i.e. sparse writes, not
 just sparse reads.
 
-**Open problem** (this is where the author believes the elegant answer lies):
+**Open problem** (being worked on now, or to be validated soon):
 
 > Can a set of shared basis matrices be learned such that editing any single code has a
 > **bounded** effect on all other tokens' outputs?
@@ -36,7 +36,7 @@ just sparse reads.
 > stability–plasticity trade-off — and locality is exactly the mechanism by which
 > biological synapses (STDP) achieve continual learning without global gradients.
 
-## What counts as done — acceptance criteria
+## Acceptance criteria
 
 The project's north-star metric is **cost-adjusted parity**, not superiority:
 

@@ -70,6 +70,11 @@ _test*.py
 _chk*.py
 *.tmp
 
+# ---- 提交信息临时文件 ----
+# 用通配符而不是精确文件名：只写 _cmsg.txt 时，_msg.txt 这类换了个名字的
+# 临时文件就会漏进来（已经发生过一次：git add -A 把它一并提交了）
+_*msg*.txt
+
 # ---- PDF 文本提取产物（由 References/*.pdf 生成，可从源头重建）----
 _paper.txt
 
